@@ -26,6 +26,7 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 - All prerequisites of running snowflake-cli mentioned [here](https://docs.snowflake.com/en/developer-guide/snowflake-cli/installation/installation#requirements)
 - Access to a Snowflake account with Snowpark Container Services enabled
 - A Snowflake compute pool configured for container workloads
+- Nextflow binary correctly installed in your PATH
 
 ### Installation
 
@@ -65,12 +66,26 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
    }
    ```
 
-2. **Run your workflow**
+2. **Upload nf-snowflake image into snowflake image repository**
+  
+   ```bash
+
+   # Pull image from github container registry
+   docker pull ghcr.io/snowflake-labs/nf-snowflake:latest
+   
+   # retag the image to snowflake registry
+   docker tag ghcr.io/snowflake-labs/nf-snowflake:latest <snowflake_registry>
+
+   # config snow nextflow to use the corresponding image
+   snow nextflow config set -key nf_snowflake_image -value <snowflake_registry_image>
+   ```
+
+3. **Run your workflow**
    ```bash
    snow nextflow run /path/to/your/nextflow-project -profile snowflake
    ```
 
-3. **Monitor execution**
+4. **Monitor execution**
    
    The plugin will automatically:
    - Upload your project to Snowflake
@@ -84,6 +99,8 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 Your `nextflow.config` must include the following Snowflake-specific settings:
 
 ```groovy
+plugins { id 'nf-snowflake@0.6.3' }
+
 snowflake {
     computePool = 'YOUR_COMPUTE_POOL'
     workDirStage = 'WORKDIR_STAGE'
