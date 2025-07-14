@@ -4,13 +4,50 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "snowflake-cli-nextflow-plugin"
+version = "0.0.1"
+description = "A Snowflake CLI plugin that enables running Nextflow workflows directly in Snowpark Container Services"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Haowei Yu", email = "haowei.yu@snowflake.com"}
+]
+keywords = [
+    "snowflake",
+    "cli",
+    "plugin",
+    "nextflow",
+    "workflow",
+    "bioinformatics",
+    "snowpark",
+    "container-services"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+    "Topic :: System :: Distributed Computing"
+]
 dependencies = [
     "snowflake-cli>=3.0.0",
     "pyyaml",
     "websockets"
 ]
-version = "0.0.1"
+
+[project.urls]
+Homepage = "https://github.com/snowflake-cli-nextflow-plugin"
+Repository = "https://github.com/snowflake-cli-nextflow-plugin"
+Documentation = "https://github.com/snowflake-cli-nextflow-plugin#readme"
+Issues = "https://github.com/snowflake-cli-nextflow-plugin/issues"
 
 [project.entry-points."snowflake.cli.plugin.command"]
 nextflow = "snowflakecli.nextflow.plugin_spec"
