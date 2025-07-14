@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "snowflake-cli-nextflow-plugin"
+name = "snowflake-cli-nextflow"
 version = "0.0.1"
 description = "A Snowflake CLI plugin that enables running Nextflow workflows directly in Snowpark Container Services"
 readme = "README.md"
