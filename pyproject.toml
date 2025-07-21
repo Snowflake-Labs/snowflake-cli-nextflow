@@ -44,10 +44,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/snowflake-cli-nextflow-plugin"
-Repository = "https://github.com/snowflake-cli-nextflow-plugin"
-Documentation = "https://github.com/snowflake-cli-nextflow-plugin#readme"
-Issues = "https://github.com/snowflake-cli-nextflow-plugin/issues"
+Homepage = "https://github.com/Snowflake-Labs/snowflake-cli-nextflow"
+Repository = "https://github.com/Snowflake-Labs/snowflake-cli-nextflow"
+Documentation = "https://github.com/Snowflake-Labs/snowflake-cli-nextflow"
+Issues = "https://github.com/Snowflake-Labs/snowflake-cli-nextflow/issues"
 
 [project.entry-points."snowflake.cli.plugin.command"]
 nextflow = "snowflakecli.nextflow.plugin_spec"
