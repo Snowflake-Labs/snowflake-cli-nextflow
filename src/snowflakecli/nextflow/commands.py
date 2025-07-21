@@ -5,6 +5,7 @@ from snowflake.cli.api.exceptions import CliError
 from snowflakecli.nextflow.manager import NextflowManager
 from snowflakecli.nextflow.config.commands import app as config_app
 from snowflake.cli.api.plugins.plugin_config import PluginConfigProvider
+from typing import Optional
 
 app = SnowTyperFactory(
     name="nextflow",
@@ -23,6 +24,11 @@ def run_workflow(
         "-profile",
         help="Nextflow profile to use for the workflow execution",
     ),
+    async_run: Optional[bool] = typer.Option(
+        False,
+        "-async",
+        help="Run workflow asynchronously without waiting for completion",
+    ),
     **options,
 ) -> CommandResult:
     """
@@ -35,12 +41,18 @@ def run_workflow(
         raise CliError("nf_snowflake_image is not set in the plugin config. Please run `snow nextflow config set -key nf_snowflake_image -value <image>` to set the image.")
 
     manager = NextflowManager(project_dir, profile, nf_snowflake_image)
-    exit_code = manager.run()
     
-    if exit_code is not None:
-        if exit_code == 0:
-            return MessageResult(f"Nextflow workflow completed successfully (exit code: {exit_code})")
-        else:
-            raise CliError(f"Nextflow workflow completed with exit code: {exit_code}")
+    if async_run is not None and async_run:
+        result = manager.run_async()
+        # For async runs, result should contain service information
+        return MessageResult(f"Nextflow workflow submitted successfully. Query ID: {result}")
     else:
-        raise CliError("Nextflow workflow execution interrupted or failed to complete")
+        result = manager.run()
+        # For sync runs, result should be exit code
+        if result is not None:
+            if result == 0:
+                return MessageResult(f"Nextflow workflow completed successfully (exit code: {result})")
+            else:
+                raise CliError(f"Nextflow workflow completed with exit code: {result}")
+        else:
+            raise CliError("Nextflow workflow execution interrupted or failed to complete")

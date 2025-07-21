@@ -37,6 +37,7 @@ class NextflowManager(SqlExecutionMixin):
     def __init__(self, project_dir: str, profile: str = None, nf_snowflake_image: str = None):
         super().__init__()
         self._project_dir = Path(project_dir)
+
         if not self._project_dir.exists() or not self._project_dir.is_dir():
             raise CliError(f"Invalid project directory '{project_dir}'")
 
@@ -211,7 +212,7 @@ class NextflowManager(SqlExecutionMixin):
         
         return exit_code
 
-    def _submit_nextflow_job(self, config: ProjectConfig, tarball_path: str) -> Optional[int]:
+    def _submit_nextflow_job(self, config: ProjectConfig, tarball_path: str, is_async: bool) -> SnowflakeCursor:
         """
         Run the nextflow pipeline.
         
@@ -235,7 +236,7 @@ class NextflowManager(SqlExecutionMixin):
             "-name",
             self._run_id,
             "-ansi-log",
-            "true",
+            str(not is_async),
             "-profile",
             self._profile,
             "-work-dir",
@@ -252,8 +253,10 @@ class NextflowManager(SqlExecutionMixin):
         mkdir -p /mnt/project
         cd /mnt/project
         tar -zxf {workDir}/{tarball_filename}
-        python3 /app/pty_server.py -- {' '.join(nf_run_cmds)}
         """
+        if not is_async:
+            run_script += "python3 /app/pty_server.py -- "
+        run_script += (" ".join(nf_run_cmds) + "\n")
 
         config.volumeConfig.volumeMounts.append(
             VolumeMount(name="workdir", mountPath=workDir)
@@ -261,6 +264,10 @@ class NextflowManager(SqlExecutionMixin):
         config.volumeConfig.volumes.append(
             Volume(name="workdir", source="@"+config.workDirStage+"/"+self._run_id+"/")
         )
+
+        endpoints = None if is_async else [
+            Endpoint(name="wss", port=8765, public=True)
+        ]
 
         spec = Specification(
             spec = Spec(
@@ -273,33 +280,38 @@ class NextflowManager(SqlExecutionMixin):
                     )
                 ],
                 volumes = config.volumeConfig.volumes,
-                endpoints = [
-                    Endpoint(name="wss", port=8765, public=True)
-                ]
+                endpoints = endpoints
             )
         )
         
         # Get YAML string for inline spec
         yaml_spec = spec.to_yaml()
 
-        execute_sql = f"""
+        if is_async:
+            execute_sql = f"""
+EXECUTE JOB SERVICE
+IN COMPUTE POOL {config.computePool}
+NAME = {self.service_name}
+FROM SPECIFICATION $$
+{yaml_spec}
+$$
+            """
+        else:
+            execute_sql = f"""
 CREATE SERVICE {self.service_name}
 IN COMPUTE POOL {config.computePool}
 FROM SPECIFICATION $$
 {yaml_spec}
 $$
         """
-        self.execute_query(execute_sql)
-        self.execute_query(f"call system$wait_for_services(30, '{self.service_name}')")
-        self.execute_query("alter session unset query_tag")
+        return self.execute_query(execute_sql, _exec_async=is_async)
 
-
-    def run(self) -> Optional[int]:
+    def run_async(self) -> str:
         """
-        Run a Nextflow workflow.
+        Run a Nextflow workflow asynchronously.
         
         Returns:
-            Exit code if execution completed successfully, None otherwise
+            Service name for monitoring the async execution
         """
         cc.step("Parsing nextflow.config...")
         config = self._parse_config()
@@ -308,13 +320,28 @@ $$
         with cc.phase("Uploading project to Snowflake..."):
             tarball_path = self._upload_project(config)
 
+        cc.step("Submitting nextflow job to Snowflake...")
+        cursor = self._submit_nextflow_job(config, tarball_path, True)
+        return cursor.sfqid
+
+    def run(self) -> Optional[int]:
+        cc.step("Parsing nextflow.config...")
+        config = self._parse_config()
+
+        tarball_path = None
+        with cc.phase("Uploading project to Snowflake..."):
+            tarball_path = self._upload_project(config)
+
+        cc.step("Submitting nextflow job to Snowflake...")
+        cursor = self._submit_nextflow_job(config, tarball_path, False)
+        cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
+
         try: 
-            cc.step("Submitting nextflow job to Snowflake...")
-            exit_code = self._submit_nextflow_job(config, tarball_path)
+            self.execute_query(f"call system$wait_for_services(30, '{self.service_name}')")
+            self.execute_query("alter session unset query_tag")
+
             # Stream logs and get exit code
             exit_code = self._stream_service_logs(self.service_name)
+            return exit_code
         finally:
             self.execute_query("drop service if exists "+self.service_name)
-
-        
-        return exit_code

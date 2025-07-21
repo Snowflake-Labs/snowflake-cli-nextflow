@@ -43,7 +43,18 @@ class Specification:
             YAML string representation of the ServiceSpec
         """
         spec_dict = asdict(self)
-        return yaml.dump(spec_dict, default_flow_style=False, indent=2)
+        # Remove None values recursively
+        cleaned_dict = self._remove_none_values(spec_dict)
+        return yaml.dump(cleaned_dict, default_flow_style=False, indent=2)
+
+    def _remove_none_values(self, obj):
+        """Recursively remove None values from dictionaries and lists."""
+        if isinstance(obj, dict):
+            return {k: self._remove_none_values(v) for k, v in obj.items() if v is not None}
+        elif isinstance(obj, list):
+            return [self._remove_none_values(item) for item in obj if item is not None]
+        else:
+            return obj
     
 @dataclass
 class VolumeConfig:
