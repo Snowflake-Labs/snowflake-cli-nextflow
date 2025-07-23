@@ -1,5 +1,5 @@
 from snowflake.cli.api.sql_execution import SqlExecutionMixin
-from snowflake.connector.cursor import SnowflakeCursor
+from snowflake.connector.cursor import SnowflakeCursor, DictCursor
 from snowflakecli.nextflow.util.cmd_runner import CommandRunner
 from snowflakecli.nextflow.service_spec import (
     Specification, Spec, Container, parse_stage_mounts, VolumeConfig, VolumeMount, Volume, Endpoint
@@ -162,8 +162,8 @@ class NextflowManager(SqlExecutionMixin):
             Exit code if execution completed successfully, None otherwise
         """
         # Get WebSocket endpoint
-        cursor = self.execute_query(f"show endpoints in service {service_name}")
-        wss_url = cursor.fetchone()[5]
+        cursor = self.execute_query(f"show endpoints in service {service_name}", cursor_class=DictCursor)
+        wss_url = cursor.fetchone()["ingress_url"]
         
         # Callback functions for WebSocket events
         def on_message(message: str) -> None:
@@ -175,7 +175,7 @@ class NextflowManager(SqlExecutionMixin):
             elif status == 'started':
                 cc.step(f"Started with PID: {data.get('pid', '')}")
             elif status == 'connected':
-                cc.step(f"Connected to WebSocket server")
+                cc.step(f"Connected to WebSocket server: {wss_url}")
                 cc.step("Streaming live output... (Press Ctrl+C to stop)")
                 cc.step("=" * 50)
             elif status == 'disconnected':
