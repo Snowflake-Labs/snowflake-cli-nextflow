@@ -2,7 +2,7 @@ from snowflake.cli.api.sql_execution import SqlExecutionMixin
 from snowflake.connector.cursor import SnowflakeCursor, DictCursor
 from snowflakecli.nextflow.util.cmd_runner import CommandRunner
 from snowflakecli.nextflow.service_spec import (
-    Specification, Spec, Container, parse_stage_mounts, VolumeConfig, VolumeMount, Volume, Endpoint
+    Specification, Spec, Container, parse_stage_mounts, VolumeConfig, VolumeMount, Volume, Endpoint, StageConfig
 )
 from dataclasses import dataclass
 from snowflake.cli.api.exceptions import CliError
@@ -31,6 +31,7 @@ class ProjectConfig:
     computePool: str = ""
     workDirStage: str = ""
     volumeConfig: VolumeConfig = None
+    enableStageMountV2: bool = False
 
 class NextflowManager(SqlExecutionMixin):
 
@@ -61,15 +62,19 @@ class NextflowManager(SqlExecutionMixin):
         """
 
         config = ProjectConfig()
+        stageMountsExpr = ""
 
         def parse_config_line(line: str) -> None:
+            nonlocal stageMountsExpr
             key, val = line.split(" = ")
             if key == "snowflake.computePool":
                 config.computePool = val.strip().replace("'", "")
             elif key == "snowflake.stageMounts":
-                config.volumeConfig = parse_stage_mounts(val.strip().replace("'", ""))
+                stageMountsExpr = val.strip().replace("'", "")
             elif key == "snowflake.workDirStage":
                 config.workDirStage = val.strip().replace("'", "")
+            elif key == "snowflake.enableStageMountV2":
+                config.enableStageMountV2 = val.strip().replace("'", "") == "true"
 
         stderr = []
         def collect_stderr(line: str) -> None:
@@ -88,6 +93,7 @@ class NextflowManager(SqlExecutionMixin):
             err_msg += "\n".join(stderr)
             raise CliError(err_msg)
 
+        config.volumeConfig = parse_stage_mounts(stageMountsExpr, config.enableStageMountV2)
         
         return config
 
@@ -242,28 +248,40 @@ class NextflowManager(SqlExecutionMixin):
             "-work-dir",
             workDir,
             "-with-report",
-            workDir+"/report.html",
+            "/tmp/report.html",
             "-with-trace",
-            workDir+"/trace.txt",
+            "/tmp/trace.txt",
             "-with-timeline",
-            workDir+"/timeline.html",
+            "/tmp/timeline.html",
         ]
-        
+
+        # if not async, we need to run the pty server to get the logs
+        python_pty_server_cmd = "python3 /app/pty_server.py -- " if not is_async else ""
         run_script = f"""
         mkdir -p /mnt/project
         cd /mnt/project
         tar -zxf {workDir}/{tarball_filename}
+
+        {python_pty_server_cmd}{" ".join(nf_run_cmds)}
+        cp /tmp/report.html /mnt/workdir/report.html
+        cp /tmp/trace.txt /mnt/workdir/trace.txt
+        cp /tmp/timeline.html /mnt/workdir/timeline.html
         """
-        if not is_async:
-            run_script += "python3 /app/pty_server.py -- "
-        run_script += (" ".join(nf_run_cmds) + "\n")
 
         config.volumeConfig.volumeMounts.append(
             VolumeMount(name="workdir", mountPath=workDir)
         )
-        config.volumeConfig.volumes.append(
-            Volume(name="workdir", source="@"+config.workDirStage+"/"+self._run_id+"/")
-        )
+
+        volume = Volume(
+            name='workdir',
+            source='stage',
+            stageConfig=StageConfig(
+                name="@"+config.workDirStage+"/"+self._run_id+"/",
+                enableSymlink=True
+            )
+        ) if config.enableStageMountV2 else Volume(name="workdir", source="@"+config.workDirStage+"/"+self._run_id+"/")
+
+        config.volumeConfig.volumes.append(volume)
 
         endpoints = None if is_async else [
             Endpoint(name="wss", port=8765, public=True)

@@ -15,9 +15,15 @@ class Container:
     volumeMounts: list[VolumeMount]
 
 @dataclass
+class StageConfig:
+    name: str
+    enableSymlink: bool
+
+@dataclass
 class Volume:
     name: str
     source: str
+    stageConfig: StageConfig
 
 @dataclass
 class Endpoint:
@@ -61,7 +67,7 @@ class VolumeConfig:
     volumes: list[Volume]
     volumeMounts: list[VolumeMount]
 
-def parse_stage_mounts(stage_mounts: str) ->VolumeConfig:
+def parse_stage_mounts(stage_mounts: str, enable_stage_mount_v2: bool) ->VolumeConfig:
     volume_mounts = []
     volumes = []
 
@@ -72,8 +78,17 @@ def parse_stage_mounts(stage_mounts: str) ->VolumeConfig:
             raise CliError("Invalid stage mount expression: " + stage_mounts[index])
 
         volume_name = "vol-" + str(index+1)
-        volumes.append(Volume(name=volume_name, source="@"+mount[0]))
         volume_mounts.append(VolumeMount(name=volume_name, mountPath=mount[1]))
+
+        volume = Volume(
+            name=volume_name,
+            source = 'stage',
+            stageConfig=StageConfig(
+                name="@"+mount[0],
+                enableSymlink=True
+                )
+            ) if enable_stage_mount_v2 else Volume(name=volume_name, source="@"+mount[0])
+        volumes.append(volume)
 
     return VolumeConfig(volumes=volumes, volumeMounts=volume_mounts)
 
