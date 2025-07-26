@@ -170,6 +170,7 @@ class NextflowManager(SqlExecutionMixin):
         # Get WebSocket endpoint
         cursor = self.execute_query(f"show endpoints in service {service_name}", cursor_class=DictCursor)
         wss_url = cursor.fetchone()["ingress_url"]
+        cc.step(f"Log Streaming URL: {wss_url}")
         
         # Callback functions for WebSocket events
         def on_message(message: str) -> None:
@@ -181,7 +182,7 @@ class NextflowManager(SqlExecutionMixin):
             elif status == 'started':
                 cc.step(f"Started with PID: {data.get('pid', '')}")
             elif status == 'connected':
-                cc.step(f"Connected to WebSocket server: {wss_url}")
+                cc.step(f"Connected to WebSocket server...")
                 cc.step("Streaming live output... (Press Ctrl+C to stop)")
                 cc.step("=" * 50)
             elif status == 'disconnected':
