@@ -23,7 +23,7 @@ class StageConfig:
 class Volume:
     name: str
     source: str
-    stageConfig: StageConfig
+    stageConfig: StageConfig = None
 
 @dataclass
 class Endpoint:
