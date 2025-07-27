@@ -61,7 +61,7 @@ class Specification:
             return [self._remove_none_values(item) for item in obj if item is not None]
         else:
             return obj
-    
+
 @dataclass
 class VolumeConfig:
     volumes: list[Volume]

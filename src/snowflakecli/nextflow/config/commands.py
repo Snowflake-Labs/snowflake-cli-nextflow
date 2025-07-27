@@ -34,7 +34,7 @@ def set(
     """
     if key not in VALID_KEYS:
         raise CliError(f"Invalid config key: {key}, valid keys are {VALID_KEYS}")
-    
+
     set_config_value(path=PLUGINS_SECTION_PATH+["nextflow", "config", key], value=value)
 
     return MessageResult(f"Successfully set config for {key} to {value}")
@@ -51,7 +51,7 @@ def get(
 ) -> CommandResult:
     if key not in VALID_KEYS:
         raise CliError(f"Invalid config key: {key}, valid keys are {VALID_KEYS}")
-    
+
     plugin_config = PluginConfigProvider.get_config("nextflow")
     if key not in plugin_config.internal_config:
         raise CliError(f"Key {key} not found in plugin config")

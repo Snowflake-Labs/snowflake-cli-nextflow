@@ -21,7 +21,7 @@ def push_image(
     ),
     target=typer.Option(
         ...,
-        "--target", 
+        "--target",
         help="Target repository path in Snowflake (e.g., 'db.schema.repo')",
         show_default=False,
     ),
@@ -45,14 +45,14 @@ def push_image(
     Example:
         snow nextflow image push --source ghcr.io/owner/repo:latest --target /db/schema/repo
     """
-    
+
     try:
         manager = ImageManager()
         image_name = manager.push_image(source, target)
 
     except Exception as e:
         raise CliError("Failed to push image: {}".format(e))
-    
+
     if update_config:
         set_config_value(path=PLUGINS_SECTION_PATH+["nextflow", "config", "nf_snowflake_image"], value=f"{image_name}")
 

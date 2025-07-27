@@ -46,7 +46,7 @@ def run_workflow(
         )
 
     manager = NextflowManager(project_dir, profile, nf_snowflake_image)
-    
+
     if async_run is not None and async_run:
         result = manager.run_async()
         # For async runs, result should contain service information

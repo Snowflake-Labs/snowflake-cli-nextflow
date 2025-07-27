@@ -16,9 +16,9 @@ from .websocket_exceptions import (
 
 __all__ = [
     'WebSocketClient',
-    'WebSocketError', 
+    'WebSocketError',
     'WebSocketConnectionError',
     'WebSocketAuthenticationError',
     'WebSocketInvalidURIError',
     'WebSocketServerError'
-] 
+]

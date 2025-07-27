@@ -44,11 +44,11 @@ class NextflowManager(SqlExecutionMixin):
 
         self._profile = profile
         self._nf_snowflake_image = nf_snowflake_image
-        
+
         # Generate random alphanumeric runtime ID using UTC timestamp and random seed
         utc_timestamp = int(datetime.now().timestamp())
         random.seed(utc_timestamp)
-        
+
         # Generate 8-character runtime ID that complies with Nextflow naming requirements
         # Must start with lowercase letter, followed by lowercase letters and digits
         first_char = random.choice(string.ascii_lowercase)
@@ -94,34 +94,34 @@ class NextflowManager(SqlExecutionMixin):
             raise CliError(err_msg)
 
         config.volumeConfig = parse_stage_mounts(stageMountsExpr, config.enableStageMountV2)
-        
+
         return config
 
     def _upload_project(self, config: ProjectConfig) -> str:
         """
         Create a tarball of the project directory and upload to Snowflake stage.
         """
-        
+
         # Create temporary file for the tarball
         with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as temp_file:
             temp_tarball_path = temp_file.name
-        
+
         try:
             cc.step("Creating tarball...")
             # Create tarball excluding .git directory
             self._create_tarball(self._project_dir, temp_tarball_path)
-            
+
             cc.step(f"Uploading to stage {config.workDirStage}...")
             # Upload to Snowflake stage
             self.execute_query(f"PUT file://{temp_tarball_path} @{config.workDirStage}/{self._run_id}")
 
             return temp_tarball_path
-            
+
         finally:
             # Clean up temporary file
             if os.path.exists(temp_tarball_path):
                 os.unlink(temp_tarball_path)
-    
+
     def _create_tarball(self, project_path: Path, tarball_path: str):
         """
         Create a tarball of the project directory, excluding .git and other unwanted files.
@@ -130,7 +130,7 @@ class NextflowManager(SqlExecutionMixin):
             project_path: Path to the project directory
             tarball_path: Path where the tarball should be created
         """
-        
+
         def tar_filter(tarinfo):
             """Filter function to exclude unwanted files/directories"""
             # Exclude other common unwanted files/directories
@@ -138,25 +138,25 @@ class NextflowManager(SqlExecutionMixin):
                 '.git',
                 '.gitignore',
             ]
-            
+
             for pattern in excluded_patterns:
                 if pattern in tarinfo.name:
                     return None
-            
+
             return tarinfo
-        
+
         try:
             with tarfile.open(tarball_path, 'w:gz') as tar:
                 # Add all files from project directory with filtering
                 tar.add(
-                    project_path, 
+                    project_path,
                     arcname=project_path.name,  # Use project name as root in archive
                     filter=tar_filter
                 )
-                
+
         except Exception as e:
             raise CliError(f"Failed to create tarball: {str(e)}")
-        
+
     def _stream_service_logs(self, service_name: str) -> Optional[int]:
         """
         Connect to service WebSocket endpoint and stream logs.
@@ -171,26 +171,26 @@ class NextflowManager(SqlExecutionMixin):
         cursor = self.execute_query(f"show endpoints in service {service_name}", cursor_class=DictCursor)
         wss_url = cursor.fetchone()["ingress_url"]
         cc.step(f"Log Streaming URL: {wss_url}")
-        
+
         # Callback functions for WebSocket events
         def on_message(message: str) -> None:
             print(message, end='')
-        
+
         def on_status(status: str, data: dict) -> None:
             if status == 'starting':
                 cc.step(f"Starting: {data.get('command', '')}")
             elif status == 'started':
                 cc.step(f"Started with PID: {data.get('pid', '')}")
             elif status == 'connected':
-                cc.step(f"Connected to WebSocket server...")
+                cc.step("Connected to WebSocket server...")
                 cc.step("Streaming live output... (Press Ctrl+C to stop)")
                 cc.step("=" * 50)
             elif status == 'disconnected':
                 cc.step(f"Disconnected: {data.get('reason', '')}")
-        
+
         def on_error(message: str, exception: Exception) -> None:
             cc.warning(f"Processing error: {message}")
-        
+
         exit_code = None
         # Create WebSocket client and connect
         try:
@@ -216,7 +216,7 @@ class NextflowManager(SqlExecutionMixin):
             raise CliError(f"WebSocket error: {e}")
         except KeyboardInterrupt:
             cc.step("Disconnected by user")
-        
+
         return exit_code
 
     def _submit_nextflow_job(self, config: ProjectConfig, tarball_path: str, is_async: bool) -> SnowflakeCursor:
@@ -302,7 +302,7 @@ class NextflowManager(SqlExecutionMixin):
                 endpoints = endpoints
             )
         )
-        
+
         # Get YAML string for inline spec
         yaml_spec = spec.to_yaml()
 
@@ -355,7 +355,7 @@ $$
         cursor = self._submit_nextflow_job(config, tarball_path, False)
         cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
 
-        try: 
+        try:
             self.execute_query(f"call system$wait_for_services(30, '{self.service_name}')")
             self.execute_query("alter session unset query_tag")
 

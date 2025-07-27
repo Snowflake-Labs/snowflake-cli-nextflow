@@ -8,14 +8,14 @@ import docker
 
 class ImageManager(SqlExecutionMixin):
     """Manager for handling Docker image operations with Snowflake SPCS image registry"""
-    
+
     def __init__(self):
         super().__init__()
         try:
             self.docker_client = docker.from_env()
         except Exception as e:
             raise CliError("Failed to connect to Docker daemon. Please ensure Docker is running: {}".format(e))
-    
+
     def _get_auth_token(self):
         # type: () -> str
         """Get Snowflake session token for registry authentication"""
@@ -25,15 +25,15 @@ class ImageManager(SqlExecutionMixin):
             return token_data['data']['sessionToken']
         except Exception as e:
             raise CliError("Failed to get authentication token: {}".format(e))
-    
+
     def _parse_source_image(self, source_image) -> tuple[str, str]:
         parts = source_image.split(":")
         if len(parts) != 2:
             raise CliError("Invalid image name: {}".format(source_image))
-        
+
         image_name = parts[0].split("/")[-1]
         image_tag = parts[1]
-        
+
         return image_name, image_tag
 
     def push_image(self, source_image, target_repo) -> str:
@@ -46,17 +46,17 @@ class ImageManager(SqlExecutionMixin):
             target_repo: Target repository path in Snowflake (e.g., '/db/schema/repo')
         """
         image_name, image_tag = self._parse_source_image(source_image)
-        
+
         image_repository_manager = ImageRepositoryManager()
         repo_url = image_repository_manager.get_repository_url(target_repo, with_scheme=False)
 
         image_registry_manager = RegistryManager()
         image_registry_manager.docker_registry_login()
 
-        
+
         # Construct full target image URL
         target_image = "{}/{}:{}".format(repo_url, image_name, image_tag)
-        
+
         try:
             # Step 1: Pull the source image
             cc.step("Pulling source image: {}".format(source_image))
@@ -68,7 +68,7 @@ class ImageManager(SqlExecutionMixin):
                 raise CliError("Source image not found: {}".format(source_image))
             except docker.errors.APIError as e:
                 raise CliError("Failed to pull source image: {}".format(e))
-            
+
             # Step 2: Tag the image for Snowflake registry
             cc.step("Tagging image for Snowflake registry: {}".format(target_image))
             try:
@@ -78,17 +78,17 @@ class ImageManager(SqlExecutionMixin):
                 cc.message("Successfully tagged image: {}".format(target_image))
             except Exception as e:
                 raise CliError("Failed to tag image: {}".format(e))
-            
+
             # Step 3: Push the image to Snowflake registry
             cc.step("Pushing image to Snowflake registry: {}".format(target_image))
             try:
                 # Simple push without streaming
                 self.docker_client.images.push(target_image)
                 cc.message("✅ Successfully pushed image to: {}".format(target_image))
-                
+
             except docker.errors.APIError as e:
                 raise CliError("Failed to push image to Snowflake registry: {}".format(e))
-            
+
         except Exception as e:
             if isinstance(e, CliError):
                 raise e
@@ -96,6 +96,6 @@ class ImageManager(SqlExecutionMixin):
                 raise CliError("Image push operation failed: {}".format(e))
 
         # return image name used in execute job service spec
-        # e.g. /db/schema/repo/nf-snowflake:0.7.0 
+        # e.g. /db/schema/repo/nf-snowflake:0.7.0
         path_parts = target_image.split("/")[1:]  # Get everything after hostname
         return "/" + "/".join(path_parts)
