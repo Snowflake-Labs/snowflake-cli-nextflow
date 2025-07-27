@@ -40,7 +40,8 @@ classifiers = [
 dependencies = [
     "snowflake-cli>=3.0.0",
     "pyyaml",
-    "websockets"
+    "websockets",
+    "docker"
 ]
 
 [project.urls]
