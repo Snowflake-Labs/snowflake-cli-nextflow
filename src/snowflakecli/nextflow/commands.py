@@ -3,7 +3,8 @@ from snowflake.cli.api.commands.snow_typer import SnowTyperFactory
 from snowflake.cli.api.output.types import CommandResult, MessageResult
 from snowflake.cli.api.exceptions import CliError
 from snowflakecli.nextflow.manager import NextflowManager
-from snowflakecli.nextflow.config.commands import app as config_app
+from snowflakecli.nextflow.config.commands import app as config_app, NF_SNOWFLAKE_IMAGE_KEY
+from snowflakecli.nextflow.image.commands import app as image_app
 from snowflake.cli.api.plugins.plugin_config import PluginConfigProvider
 from typing import Optional
 
@@ -13,6 +14,7 @@ app = SnowTyperFactory(
 )
 
 app.add_typer(config_app)
+app.add_typer(image_app)
 
 @app.command("run", requires_connection=True)
 def run_workflow(
@@ -36,9 +38,12 @@ def run_workflow(
     """
 
     plugin_config = PluginConfigProvider.get_config("nextflow")
-    nf_snowflake_image = plugin_config.internal_config.get("nf_snowflake_image")
+    nf_snowflake_image = plugin_config.internal_config.get(NF_SNOWFLAKE_IMAGE_KEY)
     if nf_snowflake_image is None:
-        raise CliError("nf_snowflake_image is not set in the plugin config. Please run `snow nextflow config set -key nf_snowflake_image -value <image>` to set the image.")
+        raise CliError(
+            "nf_snowflake_image is not set in the plugin config. "
+            "Please run `snow nextflow config set -key nf_snowflake_image -value <image>` to set the image."
+        )
 
     manager = NextflowManager(project_dir, profile, nf_snowflake_image)
     
