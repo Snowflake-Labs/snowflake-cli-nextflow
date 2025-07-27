@@ -69,15 +69,7 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 2. **Upload nf-snowflake image into snowflake image repository**
   
    ```bash
-
-   # Pull image from github container registry
-   docker pull ghcr.io/snowflake-labs/nf-snowflake:latest
-   
-   # retag the image to snowflake registry
-   docker tag ghcr.io/snowflake-labs/nf-snowflake:latest <snowflake_registry>
-
-   # config snow nextflow to use the corresponding image
-   snow nextflow config set -key nf_snowflake_image -value <snowflake_registry_image>
+   snow nextflow image push --source ghcr.io/snowflake-labs/nf-snowflake:0.7.0 --target nf_repo --update-config
    ```
 
 3. **Run your workflow**
