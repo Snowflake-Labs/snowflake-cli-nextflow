@@ -77,6 +77,9 @@ class VolumeConfig:
 
 
 def parse_stage_mounts(stage_mounts: str, enable_stage_mount_v2: bool) -> VolumeConfig:
+    if stage_mounts is None or stage_mounts == "":
+        return VolumeConfig(volumes=[], volumeMounts=[])
+
     volume_mounts = []
     volumes = []
 

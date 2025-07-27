@@ -32,7 +32,7 @@ from snowflakecli.nextflow.wss import (
     WebSocketInvalidURIError,
     WebSocketServerError,
 )
-from typing import Optional
+from typing import Optional, Callable
 
 
 @dataclass
@@ -44,7 +44,15 @@ class ProjectConfig:
 
 
 class NextflowManager(SqlExecutionMixin):
-    def __init__(self, project_dir: str, profile: str = None, nf_snowflake_image: str = None):
+    def __init__(
+        self,
+        project_dir: str,
+        profile: str = None,
+        nf_snowflake_image: str = None,
+        id_generator: Callable[[], str] = None,
+        command_runner: CommandRunner = None,
+        temp_file_generator: Callable[[str], str] = None,
+    ):
         super().__init__()
         self._project_dir = Path(project_dir)
 
@@ -53,7 +61,27 @@ class NextflowManager(SqlExecutionMixin):
 
         self._profile = profile
         self._nf_snowflake_image = nf_snowflake_image
+        self._command_runner = command_runner or CommandRunner()
 
+        # Use injected temp file generator or default one
+        self._temp_file_generator = temp_file_generator or self._default_temp_file_generator
+
+        # Use injected ID generator or default one
+        self._run_id = id_generator() if id_generator else self._generate_run_id()
+        self.service_name = f"NXF_MAIN_{self._run_id}"
+
+    def _default_temp_file_generator(self, suffix: str) -> str:
+        """
+        Default temporary file generator using tempfile.NamedTemporaryFile.
+        """
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
+            return temp_file.name
+
+    def _generate_run_id(self) -> str:
+        """
+        Generate a random 8-character runtime ID that complies with Nextflow naming requirements.
+        Must start with lowercase letter, followed by lowercase letters and digits.
+        """
         # Generate random alphanumeric runtime ID using UTC timestamp and random seed
         utc_timestamp = int(datetime.now().timestamp())
         random.seed(utc_timestamp)
@@ -62,8 +90,7 @@ class NextflowManager(SqlExecutionMixin):
         # Must start with lowercase letter, followed by lowercase letters and digits
         first_char = random.choice(string.ascii_lowercase)
         remaining_chars = "".join(random.choices(string.ascii_lowercase + string.digits, k=7))
-        self._run_id = first_char + remaining_chars
-        self.service_name = f"NXF_MAIN_{self._run_id}"
+        return first_char + remaining_chars
 
     def _parse_config(self) -> ProjectConfig:
         """
@@ -90,14 +117,13 @@ class NextflowManager(SqlExecutionMixin):
         def collect_stderr(line: str) -> None:
             stderr.append(line)
 
-        runner = CommandRunner()
-        runner.set_stdout_callback(parse_config_line)
-        runner.set_stderr_callback(collect_stderr)
+        self._command_runner.set_stdout_callback(parse_config_line)
+        self._command_runner.set_stderr_callback(collect_stderr)
         cmds = ["nextflow", "config", self._project_dir.name, "-flat"]
         if self._profile:
             cmds += ["-profile", self._profile]
 
-        ret = runner.run(cmds)
+        ret = self._command_runner.run(cmds)
         if ret != 0:
             err_msg = "Failed to parse nextflow.config\n"
             err_msg += "\n".join(stderr)
@@ -112,9 +138,8 @@ class NextflowManager(SqlExecutionMixin):
         Create a tarball of the project directory and upload to Snowflake stage.
         """
 
-        # Create temporary file for the tarball
-        with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as temp_file:
-            temp_tarball_path = temp_file.name
+        # Create temporary file for the tarball using injected generator
+        temp_tarball_path = self._temp_file_generator(".tar.gz")
 
         try:
             cc.step("Creating tarball...")
