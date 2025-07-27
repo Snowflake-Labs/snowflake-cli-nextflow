@@ -40,7 +40,7 @@ class ImageManager(SqlExecutionMixin):
         # type: (str, str) -> None
         """
         Pull image from source, retag it, and push to Snowflake SPCS image repository
-        
+
         Args:
             source_image: Source image name (e.g., 'ghcr.io/owner/repo:tag')
             target_repo: Target repository path in Snowflake (e.g., '/db/schema/repo')

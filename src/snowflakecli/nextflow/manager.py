@@ -125,7 +125,7 @@ class NextflowManager(SqlExecutionMixin):
     def _create_tarball(self, project_path: Path, tarball_path: str):
         """
         Create a tarball of the project directory, excluding .git and other unwanted files.
-        
+
         Args:
             project_path: Path to the project directory
             tarball_path: Path where the tarball should be created
@@ -160,10 +160,10 @@ class NextflowManager(SqlExecutionMixin):
     def _stream_service_logs(self, service_name: str) -> Optional[int]:
         """
         Connect to service WebSocket endpoint and stream logs.
-        
+
         Args:
             service_name: Name of the service to connect to
-            
+
         Returns:
             Exit code if execution completed successfully, None otherwise
         """
@@ -222,7 +222,7 @@ class NextflowManager(SqlExecutionMixin):
     def _submit_nextflow_job(self, config: ProjectConfig, tarball_path: str, is_async: bool) -> SnowflakeCursor:
         """
         Run the nextflow pipeline.
-        
+
         Returns:
             Exit code if execution completed successfully, None otherwise
         """
@@ -328,7 +328,7 @@ $$
     def run_async(self) -> str:
         """
         Run a Nextflow workflow asynchronously.
-        
+
         Returns:
             Service name for monitoring the async execution
         """

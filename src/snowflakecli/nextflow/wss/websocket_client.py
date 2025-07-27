@@ -21,7 +21,7 @@ from .websocket_exceptions import (
 class WebSocketClient:
     """
     WebSocket client for connecting to Nextflow PTY servers with Snowflake authentication.
-    
+
     This class is decoupled from CLI dependencies and uses callback patterns for
     output and error handling.
     """
@@ -33,7 +33,7 @@ class WebSocketClient:
                  error_callback: Optional[Callable[[str, Exception], None]] = None):
         """
         Initialize WebSocket client.
-        
+
         Args:
             conn: Snowflake connection object
             message_callback: Callback for output messages (type, data)
@@ -70,13 +70,13 @@ class WebSocketClient:
     async def connect_and_stream(self, server_url: str) -> Optional[int]:
         """
         Connect to WebSocket server and stream messages.
-        
+
         Args:
             server_url: WebSocket server URL
-            
+
         Returns:
             Exit code if process completed successfully, None otherwise
-            
+
         Raises:
             WebSocketInvalidURIError: If URL is invalid
             WebSocketAuthenticationError: If authentication fails

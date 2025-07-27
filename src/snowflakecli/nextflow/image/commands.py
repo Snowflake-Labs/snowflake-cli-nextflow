@@ -35,13 +35,13 @@ def push_image(
 ) -> CommandResult:
     """
     Pull an image from source, retag it, and push to Snowflake SPCS image repository.
-    
+
     This command will:
     1. Pull the image from the source registry
-    2. Get authentication token for Snowflake image registry  
+    2. Get authentication token for Snowflake image registry
     3. Retag the image for the target Snowflake repository
     4. Push the image to Snowflake SPCS image registry
-    
+
     Example:
         snow nextflow image push --source ghcr.io/owner/repo:latest --target /db/schema/repo
     """

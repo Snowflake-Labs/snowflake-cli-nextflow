@@ -44,7 +44,7 @@ class Specification:
     def to_yaml(self) -> str:
         """
         Convert ServiceSpec to YAML string.
-        
+
         Returns:
             YAML string representation of the ServiceSpec
         """
