@@ -14,7 +14,7 @@ from .websocket_exceptions import (
     WebSocketConnectionError,
     WebSocketAuthenticationError,
     WebSocketInvalidURIError,
-    WebSocketServerError
+    WebSocketServerError,
 )
 
 
@@ -26,11 +26,13 @@ class WebSocketClient:
     output and error handling.
     """
 
-    def __init__(self,
-                 conn,
-                 message_callback: Optional[Callable[[str], None]] = None,
-                 status_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-                 error_callback: Optional[Callable[[str, Exception], None]] = None):
+    def __init__(
+        self,
+        conn,
+        message_callback: Optional[Callable[[str], None]] = None,
+        status_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        error_callback: Optional[Callable[[str, Exception], None]] = None,
+    ):
         """
         Initialize WebSocket client.
 
@@ -48,7 +50,7 @@ class WebSocketClient:
 
     def _default_message_callback(self, message: str) -> None:
         """Default message callback - just print"""
-        print(message, end='')
+        print(message, end="")
 
     def _default_status_callback(self, status: str, data: Dict[str, Any]) -> None:
         """Default status callback - just print"""
@@ -62,8 +64,8 @@ class WebSocketClient:
         """Get Snowflake session token for authentication"""
         try:
             self.conn.cursor().execute("alter session set python_connector_query_result_format = 'json'")
-            token_data = self.conn._rest._token_request('ISSUE')
-            return token_data['data']['sessionToken']
+            token_data = self.conn._rest._token_request("ISSUE")
+            return token_data["data"]["sessionToken"]
         except Exception as e:
             raise WebSocketAuthenticationError(f"Failed to get authentication token: {e}")
 
@@ -88,19 +90,14 @@ class WebSocketClient:
             token = self._get_auth_token()
 
             # Prepare headers for authentication
-            headers = {'Authorization': f'Snowflake Token="{token}"'}
+            headers = {"Authorization": f'Snowflake Token="{token}"'}
 
             # Create SSL context for wss connection
             ssl_context = ssl.create_default_context()
 
             # Connect to the WebSocket server
             try:
-                async with websockets.connect(
-                    server_url,
-                    additional_headers=headers,
-                    ssl=ssl_context
-                ) as websocket:
-
+                async with websockets.connect(server_url, additional_headers=headers, ssl=ssl_context) as websocket:
                     self.status_callback("connected", {"url": server_url})
 
                     try:
@@ -140,28 +137,28 @@ class WebSocketClient:
             data = json.loads(message)
 
             # Handle different message types
-            msg_type = data.get('type', 'unknown')
+            msg_type = data.get("type", "unknown")
 
-            if msg_type == 'output':
+            if msg_type == "output":
                 # Output data from Nextflow
-                output_data = data.get('data', '')
+                output_data = data.get("data", "")
                 self.message_callback(output_data)
 
-            elif msg_type == 'status':
+            elif msg_type == "status":
                 # Status updates
-                status = data.get('status', '')
-                status_data = {k: v for k, v in data.items() if k != 'type'}
+                status = data.get("status", "")
+                status_data = {k: v for k, v in data.items() if k != "type"}
                 self.status_callback(status, status_data)
 
                 # Capture exit code if process completed
-                if status == 'completed':
-                    self.exit_code = data.get('exit_code', 0)
+                if status == "completed":
+                    self.exit_code = data.get("exit_code", 0)
 
-            elif msg_type == 'error':
+            elif msg_type == "error":
                 # Server error message
-                error_msg = data.get('message', 'Unknown server error')
-                error_code = data.get('code')
-                error_data = data.get('data', {})
+                error_msg = data.get("message", "Unknown server error")
+                error_code = data.get("code")
+                error_data = data.get("data", {})
                 raise WebSocketServerError(error_msg, error_code, error_data)
 
             else:

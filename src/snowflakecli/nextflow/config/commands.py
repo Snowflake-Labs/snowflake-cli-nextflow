@@ -13,6 +13,7 @@ app = SnowTyperFactory(
     help="Manage Nextflow plugin configuration",
 )
 
+
 @app.command()
 def set(
     key: str = typer.Option(
@@ -35,9 +36,10 @@ def set(
     if key not in VALID_KEYS:
         raise CliError(f"Invalid config key: {key}, valid keys are {VALID_KEYS}")
 
-    set_config_value(path=PLUGINS_SECTION_PATH+["nextflow", "config", key], value=value)
+    set_config_value(path=PLUGINS_SECTION_PATH + ["nextflow", "config", key], value=value)
 
     return MessageResult(f"Successfully set config for {key} to {value}")
+
 
 @app.command()
 def get(
@@ -57,4 +59,3 @@ def get(
         raise CliError(f"Key {key} not found in plugin config")
 
     return MessageResult(f"Getting config for {key} to {plugin_config.internal_config[key]}")
-

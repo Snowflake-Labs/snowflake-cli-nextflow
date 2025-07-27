@@ -31,7 +31,7 @@ def push_image(
         help="Update the config file with the new image",
         show_default=False,
     ),
-    **options
+    **options,
 ) -> CommandResult:
     """
     Pull an image from source, retag it, and push to Snowflake SPCS image repository.
@@ -54,6 +54,8 @@ def push_image(
         raise CliError("Failed to push image: {}".format(e))
 
     if update_config:
-        set_config_value(path=PLUGINS_SECTION_PATH+["nextflow", "config", "nf_snowflake_image"], value=f"{image_name}")
+        set_config_value(
+            path=PLUGINS_SECTION_PATH + ["nextflow", "config", "nf_snowflake_image"], value=f"{image_name}"
+        )
 
     return MessageResult("Successfully pushed image to Snowflake registry")

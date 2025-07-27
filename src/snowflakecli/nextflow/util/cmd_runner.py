@@ -3,6 +3,7 @@ import subprocess
 import os
 from snowflake.cli.api.exceptions import CliError
 
+
 class CommandRunner:
     def __init__(self):
         self.stdout_callback: Optional[Callable[[str], None]] = None
@@ -32,12 +33,12 @@ class CommandRunner:
             # Process stdout
             if self.stdout_callback:
                 for line in process.stdout:
-                    self.stdout_callback(line.rstrip('\n'))
+                    self.stdout_callback(line.rstrip("\n"))
 
             # Process stderr
             if self.stderr_callback:
                 for line in process.stderr:
-                    self.stderr_callback(line.rstrip('\n'))
+                    self.stderr_callback(line.rstrip("\n"))
 
             return process.wait()
 

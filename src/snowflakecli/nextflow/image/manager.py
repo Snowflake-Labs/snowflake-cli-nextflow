@@ -21,8 +21,8 @@ class ImageManager(SqlExecutionMixin):
         """Get Snowflake session token for registry authentication"""
         try:
             self.execute_query("alter session set python_connector_query_result_format = 'json'")
-            token_data = self._ctx.connection._rest._token_request('ISSUE')
-            return token_data['data']['sessionToken']
+            token_data = self._ctx.connection._rest._token_request("ISSUE")
+            return token_data["data"]["sessionToken"]
         except Exception as e:
             raise CliError("Failed to get authentication token: {}".format(e))
 
@@ -52,7 +52,6 @@ class ImageManager(SqlExecutionMixin):
 
         image_registry_manager = RegistryManager()
         image_registry_manager.docker_registry_login()
-
 
         # Construct full target image URL
         target_image = "{}/{}:{}".format(repo_url, image_name, image_tag)

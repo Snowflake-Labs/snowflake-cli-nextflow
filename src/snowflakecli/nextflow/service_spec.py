@@ -2,10 +2,12 @@ from dataclasses import dataclass, asdict
 from snowflake.cli.api.exceptions import CliError
 import yaml
 
+
 @dataclass
 class VolumeMount:
     name: str
     mountPath: str
+
 
 @dataclass
 class Container:
@@ -14,10 +16,12 @@ class Container:
     command: list[str]
     volumeMounts: list[VolumeMount]
 
+
 @dataclass
 class StageConfig:
     name: str
     enableSymlink: bool
+
 
 @dataclass
 class Volume:
@@ -25,17 +29,20 @@ class Volume:
     source: str
     stageConfig: StageConfig = None
 
+
 @dataclass
 class Endpoint:
     name: str
     port: int
     public: bool
 
+
 @dataclass
 class Spec:
     containers: list[Container]
     volumes: list[Volume]
     endpoints: list[Endpoint]
+
 
 @dataclass
 class Specification:
@@ -62,12 +69,14 @@ class Specification:
         else:
             return obj
 
+
 @dataclass
 class VolumeConfig:
     volumes: list[Volume]
     volumeMounts: list[VolumeMount]
 
-def parse_stage_mounts(stage_mounts: str, enable_stage_mount_v2: bool) ->VolumeConfig:
+
+def parse_stage_mounts(stage_mounts: str, enable_stage_mount_v2: bool) -> VolumeConfig:
     volume_mounts = []
     volumes = []
 
@@ -77,23 +86,14 @@ def parse_stage_mounts(stage_mounts: str, enable_stage_mount_v2: bool) ->VolumeC
         if len(mount) != 2:
             raise CliError("Invalid stage mount expression: " + stage_mounts[index])
 
-        volume_name = "vol-" + str(index+1)
+        volume_name = "vol-" + str(index + 1)
         volume_mounts.append(VolumeMount(name=volume_name, mountPath=mount[1]))
 
-        volume = Volume(
-            name=volume_name,
-            source = 'stage',
-            stageConfig=StageConfig(
-                name="@"+mount[0],
-                enableSymlink=True
-                )
-            ) if enable_stage_mount_v2 else Volume(name=volume_name, source="@"+mount[0])
+        volume = (
+            Volume(name=volume_name, source="stage", stageConfig=StageConfig(name="@" + mount[0], enableSymlink=True))
+            if enable_stage_mount_v2
+            else Volume(name=volume_name, source="@" + mount[0])
+        )
         volumes.append(volume)
 
     return VolumeConfig(volumes=volumes, volumeMounts=volume_mounts)
-
-
-
-
-
-
