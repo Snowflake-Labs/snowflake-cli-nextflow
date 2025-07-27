@@ -16,11 +16,10 @@ app = SnowTyperFactory(
 app.add_typer(config_app)
 app.add_typer(image_app)
 
+
 @app.command("run", requires_connection=True)
 def run_workflow(
-    project_dir: str = typer.Argument(
-        help="Name of the workflow to run"
-    ),
+    project_dir: str = typer.Argument(help="Name of the workflow to run"),
     profile: str = typer.Option(
         None,
         "-profile",
@@ -46,7 +45,7 @@ def run_workflow(
         )
 
     manager = NextflowManager(project_dir, profile, nf_snowflake_image)
-    
+
     if async_run is not None and async_run:
         result = manager.run_async()
         # For async runs, result should contain service information
