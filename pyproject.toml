@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "snowflake-cli-nextflow"
-version = "0.0.3"
+version = "0.1.0"
 description = "A Snowflake CLI plugin that enables running Nextflow workflows directly in Snowpark Container Services"
 readme = "README.md"
 requires-python = ">=3.10"
