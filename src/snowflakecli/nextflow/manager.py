@@ -40,7 +40,7 @@ class ProjectConfig:
     computePool: str = ""
     workDirStage: str = ""
     volumeConfig: VolumeConfig = None
-    enableStageMountV2: bool = False
+    enableStageMountV2: bool = True
 
 
 class NextflowManager(SqlExecutionMixin):

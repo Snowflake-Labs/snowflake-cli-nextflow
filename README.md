@@ -69,7 +69,7 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 2. **Upload nf-snowflake image into snowflake image repository**
   
    ```bash
-   snow nextflow image push --source ghcr.io/snowflake-labs/nf-snowflake:0.7.0 --target nf_repo --update-config
+   snow nextflow image push --source ghcr.io/snowflake-labs/nf-snowflake:0.7.1 --target nf_repo --update-config
    ```
 
 3. **Run your workflow**
@@ -91,7 +91,7 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 Your `nextflow.config` must include the following Snowflake-specific settings:
 
 ```groovy
-plugins { id 'nf-snowflake@0.6.3' }
+plugins { id 'nf-snowflake@0.7.1' }
 
 snowflake {
     computePool = 'YOUR_COMPUTE_POOL'
