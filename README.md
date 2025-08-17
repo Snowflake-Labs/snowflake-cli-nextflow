@@ -26,7 +26,6 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 - All prerequisites of running snowflake-cli mentioned [here](https://docs.snowflake.com/en/developer-guide/snowflake-cli/installation/installation#requirements)
 - Access to a Snowflake account with Snowpark Container Services enabled
 - A Snowflake compute pool configured for container workloads
-- Nextflow binary correctly installed in your PATH
 
 ### Installation
 
@@ -91,7 +90,7 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 Your `nextflow.config` must include the following Snowflake-specific settings:
 
 ```groovy
-plugins { id 'nf-snowflake@0.7.1' }
+plugins { id 'nf-snowflake@0.8.0' }
 
 snowflake {
     computePool = 'YOUR_COMPUTE_POOL'
