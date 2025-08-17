@@ -1,6 +1,5 @@
 from snowflake.cli.api.sql_execution import SqlExecutionMixin
 from snowflake.connector.cursor import SnowflakeCursor, DictCursor
-from snowflakecli.nextflow.util.cmd_runner import CommandRunner
 from snowflakecli.nextflow.service_spec import (
     Specification,
     Spec,
@@ -33,6 +32,7 @@ from snowflakecli.nextflow.wss import (
     WebSocketServerError,
 )
 from typing import Optional, Callable
+from snowflakecli.nextflow.parser import NextflowConfigParser
 
 
 @dataclass
@@ -50,7 +50,6 @@ class NextflowManager(SqlExecutionMixin):
         profile: str = None,
         nf_snowflake_image: str = None,
         id_generator: Callable[[], str] = None,
-        command_runner: CommandRunner = None,
         temp_file_generator: Callable[[str], str] = None,
     ):
         super().__init__()
@@ -61,7 +60,6 @@ class NextflowManager(SqlExecutionMixin):
 
         self._profile = profile
         self._nf_snowflake_image = nf_snowflake_image
-        self._command_runner = command_runner or CommandRunner()
 
         # Use injected temp file generator or default one
         self._temp_file_generator = temp_file_generator or self._default_temp_file_generator
@@ -96,40 +94,15 @@ class NextflowManager(SqlExecutionMixin):
         """
         Parse the nextflow.config file and return a ProjectConfig object.
         """
+        parser = NextflowConfigParser()
+        selected = parser.parse(self._project_dir, self._profile)
 
         config = ProjectConfig()
-        stageMountsExpr = ""
-
-        def parse_config_line(line: str) -> None:
-            nonlocal stageMountsExpr
-            key, val = line.split(" = ")
-            if key == "snowflake.computePool":
-                config.computePool = val.strip().replace("'", "")
-            elif key == "snowflake.stageMounts":
-                stageMountsExpr = val.strip().replace("'", "")
-            elif key == "snowflake.workDirStage":
-                config.workDirStage = val.strip().replace("'", "")
-            elif key == "snowflake.enableStageMountV2":
-                config.enableStageMountV2 = val.strip().replace("'", "") == "true"
-
-        stderr = []
-
-        def collect_stderr(line: str) -> None:
-            stderr.append(line)
-
-        self._command_runner.set_stdout_callback(parse_config_line)
-        self._command_runner.set_stderr_callback(collect_stderr)
-        cmds = ["nextflow", "config", self._project_dir.name, "-flat"]
-        if self._profile:
-            cmds += ["-profile", self._profile]
-
-        ret = self._command_runner.run(cmds)
-        if ret != 0:
-            err_msg = "Failed to parse nextflow.config\n"
-            err_msg += "\n".join(stderr)
-            raise CliError(err_msg)
-
-        config.volumeConfig = parse_stage_mounts(stageMountsExpr, config.enableStageMountV2)
+        config.computePool = selected.get("computePool", "")
+        config.workDirStage = selected.get("workDirStage", "")
+        config.enableStageMountV2 = selected.get("enableStageMountV2", True)
+        stage_mounts_expr = selected.get("stageMounts", "")
+        config.volumeConfig = parse_stage_mounts(stage_mounts_expr, config.enableStageMountV2)
 
         return config
 

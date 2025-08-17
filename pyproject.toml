@@ -41,7 +41,8 @@ dependencies = [
     "snowflake-cli>=3.0.0",
     "pyyaml",
     "websockets",
-    "docker"
+    "docker",
+    "groovy-parser",
 ]
 
 [project.urls]

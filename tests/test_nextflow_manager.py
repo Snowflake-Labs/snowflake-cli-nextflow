@@ -1,42 +1,54 @@
+import tempfile
+import os
 from snowflakecli.nextflow.manager import NextflowManager
-from util.mock_command_runner import MockCommandRunner
 
 
 def test_nextflow_manager_run_async(mock_db):
-    # Create a custom mock runner with expected test configuration
-    test_config = {
-        "snowflake.computePool": "test",
-        "snowflake.workDirStage": "data_stage",
-        "snowflake.stageMounts": "input:/data/input,output:/data/output",
-        "snowflake.enableStageMountV2": "true",
+    # Create nextflow.config content with test profile
+    config_content = """
+profiles {
+    test {
+        snowflake {
+            computePool = 'test'
+            workDirStage = 'data_stage'
+            stageMounts = 'input:/data/input,output:/data/output'
+            enableStageMountV2 = true
+        }
     }
+}
+"""
 
-    manager = NextflowManager(
-        project_dir=".",
-        profile="test",
-        id_generator=lambda: "abc1234",
-        command_runner=MockCommandRunner(test_config),
-        temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-    )
-    manager.run_async()
+    # Create temporary directory with nextflow.config file
+    with tempfile.TemporaryDirectory() as temp_dir:
+        config_path = os.path.join(temp_dir, "nextflow.config")
+        with open(config_path, "w") as f:
+            f.write(config_content)
 
-    executed_queries = mock_db.get_executed_queries()
-    # Check that we have the expected number of queries
-    assert len(executed_queries) == 3
+        manager = NextflowManager(
+            project_dir=temp_dir,
+            profile="test",
+            id_generator=lambda: "abc1234",
+            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
+        )
+        manager.run_async()
 
-    # Check that the PUT command uses the deterministic file name
-    put_query = executed_queries[0]
-    assert put_query.startswith("PUT file:///tmp/tmp1234.tar.gz @data_stage/abc1234")
+        executed_queries = mock_db.get_executed_queries()
+        # Check that we have the expected number of queries
+        assert len(executed_queries) == 3
 
-    # Check that the query tag is set correctly
-    query_tag = executed_queries[1]
-    assert "alter session set query_tag" in query_tag
-    assert '"NEXTFLOW_JOB_TYPE": "main"' in query_tag
-    assert '"NEXTFLOW_RUN_ID": "abc1234"' in query_tag
+        # Check that the PUT command uses the deterministic file name
+        put_query = executed_queries[0]
+        assert put_query.startswith("PUT file:///tmp/tmp1234.tar.gz @data_stage/abc1234")
 
-    assert (
-        executed_queries[2]
-        == """
+        # Check that the query tag is set correctly
+        query_tag = executed_queries[1]
+        assert "alter session set query_tag" in query_tag
+        assert '"NEXTFLOW_JOB_TYPE": "main"' in query_tag
+        assert '"NEXTFLOW_RUN_ID": "abc1234"' in query_tag
+
+        assert (
+            executed_queries[2]
+            == """
 EXECUTE JOB SERVICE
 IN COMPUTE POOL test
 NAME = NXF_MAIN_abc1234
@@ -79,4 +91,4 @@ spec:
 
 $$
 """
-    )
+        )
