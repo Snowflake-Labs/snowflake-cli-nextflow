@@ -171,6 +171,87 @@ snowflake.anotherFlag = false
             assert result["enableStageMountV2"] is True
             assert result["anotherFlag"] is False
 
+    def test_parse_plugins_config(self):
+        """Test parsing plugins configuration."""
+        config_text = """
+plugins {
+    id 'nf-snowflake@0.8.0'
+    id 'nf-amazon@2.0.0'
+}
+
+snowflake {
+    computePool = 'test_pool'
+    workDirStage = 'test_stage'
+}
+"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "nextflow.config")
+            with open(config_path, "w") as f:
+                f.write(config_text)
+
+            result = self.parser.parse(temp_dir)
+
+            assert "plugins" in result
+            assert len(result["plugins"]) == 2
+            
+            # Find nf-snowflake plugin
+            nf_snowflake_plugin = next(
+                (p for p in result["plugins"] if p["name"] == "nf-snowflake"), None
+            )
+            assert nf_snowflake_plugin is not None
+            assert nf_snowflake_plugin["version"] == "0.8.0"
+            
+            # Find nf-amazon plugin
+            nf_amazon_plugin = next(
+                (p for p in result["plugins"] if p["name"] == "nf-amazon"), None
+            )
+            assert nf_amazon_plugin is not None
+            assert nf_amazon_plugin["version"] == "2.0.0"
+
+    def test_parse_plugins_without_version(self):
+        """Test parsing plugins configuration without version."""
+        config_text = """
+plugins {
+    id 'nf-snowflake'
+}
+
+snowflake {
+    computePool = 'test_pool'
+}
+"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "nextflow.config")
+            with open(config_path, "w") as f:
+                f.write(config_text)
+
+            result = self.parser.parse(temp_dir)
+
+            assert "plugins" in result
+            assert len(result["plugins"]) == 1
+            
+            plugin = result["plugins"][0]
+            assert plugin["name"] == "nf-snowflake"
+            assert plugin["version"] is None
+
+    def test_parse_no_plugins(self):
+        """Test parsing config without plugins section."""
+        config_text = """
+snowflake {
+    computePool = 'test_pool'
+    workDirStage = 'test_stage'
+}
+"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "nextflow.config")
+            with open(config_path, "w") as f:
+                f.write(config_text)
+
+            result = self.parser.parse(temp_dir)
+
+            assert "plugins" not in result or len(result.get("plugins", [])) == 0
+            assert result["computePool"] == "test_pool"
+            assert result["workDirStage"] == "test_stage"
+
     def test_parse_missing_config_file(self):
         """Test handling of missing nextflow.config file."""
         with tempfile.TemporaryDirectory() as temp_dir:
