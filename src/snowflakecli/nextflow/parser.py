@@ -35,18 +35,18 @@ class NextflowConfigParser:
         try:
             tree = parse_groovy_content(config_text)
             t_tree = digest_lark_tree(tree)
-            
+
             # Extract snowflake configuration
             snowflake_config = self._extract_snowflake_config(t_tree, profile)
-            
+
             # Extract plugins configuration (always from global scope)
             plugins_config = self._extract_plugins_config(t_tree)
-            
+
             # Combine both configurations
             result = snowflake_config.copy()
             if plugins_config:
                 result["plugins"] = plugins_config
-                
+
             return result
 
         except Exception as e:
@@ -345,16 +345,16 @@ class NextflowConfigParser:
     def _extract_plugins_config(self, tree: Dict[str, Any]) -> List[Dict[str, str]]:
         """Extract plugins configuration from the parsed AST tree."""
         plugins = []
-        
+
         # Get all statements from the script
         statements = self._get_statements(tree)
-        
+
         for statement in statements:
             # Look for plugins block: plugins { ... }
             if self._is_plugins_config_block(statement):
                 plugins_list = self._extract_from_plugins_block(statement)
                 plugins.extend(plugins_list)
-                
+
         return plugins
 
     def _is_plugins_config_block(self, statement: Dict[str, Any]) -> bool:
@@ -391,7 +391,7 @@ class NextflowConfigParser:
         """Extract plugin name and version from a plugin declaration like 'id nf-snowflake@0.8.0'"""
         try:
             children = statement.get("children", [])
-            
+
             # Look for command_expression with 'id' identifier followed by string argument
             if len(children) >= 2:
                 first_child = children[0]
@@ -399,18 +399,12 @@ class NextflowConfigParser:
                     # The second child should be an argument_list containing the plugin specification
                     second_child = children[1]
                     plugin_spec = self._extract_value(second_child)
-                    if plugin_spec and '@' in plugin_spec:
-                        plugin_name, version = plugin_spec.split('@', 1)
-                        return {
-                            "name": plugin_name.strip("'\""),
-                            "version": version.strip("'\"")
-                        }
+                    if plugin_spec and "@" in plugin_spec:
+                        plugin_name, version = plugin_spec.split("@", 1)
+                        return {"name": plugin_name.strip("'\""), "version": version.strip("'\"")}
                     elif plugin_spec:
                         # Plugin without version
-                        return {
-                            "name": plugin_spec.strip("'\""),
-                            "version": None
-                        }
+                        return {"name": plugin_spec.strip("'\""), "version": None}
         except (KeyError, TypeError, IndexError, ValueError):
             pass
         return None

@@ -113,75 +113,70 @@ class NextflowManager(SqlExecutionMixin):
     def _validate_plugin_versions(self, parsed_config: dict) -> None:
         """
         Validate that the nf-snowflake plugin version matches the nf_snowflake_image version.
-        
+
         Args:
             parsed_config: The parsed configuration containing plugins information
-            
+
         Raises:
             CliError: If version mismatch is detected
         """
-        plugins = parsed_config.get("plugins", [])
-        if not plugins:
-            # No plugins configured, skip validation
-            return
-            
         # Find nf-snowflake plugin
         nf_snowflake_plugin = None
-        for plugin in plugins:
+        for plugin in parsed_config.get("plugins", []):
             if plugin.get("name") == "nf-snowflake":
                 nf_snowflake_plugin = plugin
                 break
-                
+
         if not nf_snowflake_plugin:
             # nf-snowflake plugin not found, skip validation
-            return
-            
+            raise CliError("nf-snowflake plugin not found in nextflow.config")
+
         plugin_version = nf_snowflake_plugin.get("version")
         if not plugin_version:
             # Plugin version not specified, skip validation
-            return
-            
+            raise CliError("nf-snowflake plugin version not specified in nextflow.config")
+
         # Extract version from nf_snowflake_image
         image_version = self._extract_version_from_image(self._nf_snowflake_image)
         if not image_version:
             # Cannot extract version from image, skip validation
-            return
-            
+            raise CliError("nf_snowflake_image version not specified")
+
         # Compare versions
         if plugin_version != image_version:
             raise CliError(
                 f"Version mismatch detected: "
                 f"nf-snowflake plugin version '{plugin_version}' does not match "
                 f"nf_snowflake_image version '{image_version}'. "
-                f"Please ensure both versions are aligned for compatibility."
+                f"Please ensure both versions are aligned to avoid plugin download inside container."
             )
-            
+
     def _extract_version_from_image(self, image_name: str) -> Optional[str]:
         """
         Extract version from nf_snowflake_image name.
-        
+
         Supports patterns like:
         - repo/nf-snowflake:0.8.0
         - nf-snowflake:0.8.0
         - ghcr.io/snowflake-labs/nf-snowflake:0.7.1
-        
+
         Args:
             image_name: The image name/tag
-            
+
         Returns:
             Version string if found, None otherwise
         """
         if not image_name:
             return None
-            
+
         # Pattern to match version tag after colon
         # Matches semantic versions (x.y.z) or tags like "latest", "stable", etc.
-        version_pattern = r':([a-zA-Z0-9\.-]+?)(?:$|@)'
+        version_pattern = r":([a-zA-Z0-9\.-]+?)(?:$|@)"
         match = re.search(version_pattern, image_name)
-        
+
         if match:
             return match.group(1)
-            
+
         return None
 
     def _upload_project(self, config: ProjectConfig) -> str:

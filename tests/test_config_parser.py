@@ -193,18 +193,14 @@ snowflake {
 
             assert "plugins" in result
             assert len(result["plugins"]) == 2
-            
+
             # Find nf-snowflake plugin
-            nf_snowflake_plugin = next(
-                (p for p in result["plugins"] if p["name"] == "nf-snowflake"), None
-            )
+            nf_snowflake_plugin = next((p for p in result["plugins"] if p["name"] == "nf-snowflake"), None)
             assert nf_snowflake_plugin is not None
             assert nf_snowflake_plugin["version"] == "0.8.0"
-            
+
             # Find nf-amazon plugin
-            nf_amazon_plugin = next(
-                (p for p in result["plugins"] if p["name"] == "nf-amazon"), None
-            )
+            nf_amazon_plugin = next((p for p in result["plugins"] if p["name"] == "nf-amazon"), None)
             assert nf_amazon_plugin is not None
             assert nf_amazon_plugin["version"] == "2.0.0"
 
@@ -228,7 +224,7 @@ snowflake {
 
             assert "plugins" in result
             assert len(result["plugins"]) == 1
-            
+
             plugin = result["plugins"][0]
             assert plugin["name"] == "nf-snowflake"
             assert plugin["version"] is None

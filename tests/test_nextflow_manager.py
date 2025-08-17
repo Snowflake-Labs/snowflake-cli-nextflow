@@ -8,6 +8,10 @@ import pytest
 def test_nextflow_manager_run_async(mock_db):
     # Create nextflow.config content with test profile
     config_content = """
+plugins {
+    id 'nf-snowflake@0.8.0'
+}
+
 profiles {
     test {
         snowflake {
@@ -30,6 +34,7 @@ profiles {
             project_dir=temp_dir,
             profile="test",
             id_generator=lambda: "abc1234",
+            nf_snowflake_image="ghcr.io/snowflake-labs/nf-snowflake:0.8.0",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
         manager.run_async()
@@ -66,6 +71,7 @@ spec:
       \\ /tmp/trace.txt -with-timeline /tmp/timeline.html\\n        cp /tmp/report.html\\
       \\ /mnt/workdir/report.html\\n        cp /tmp/trace.txt /mnt/workdir/trace.txt\\n\\
       \\        cp /tmp/timeline.html /mnt/workdir/timeline.html\\n        "
+    image: ghcr.io/snowflake-labs/nf-snowflake:0.8.0
     name: nf-main
     volumeMounts:
     - mountPath: /data/input
@@ -186,7 +192,9 @@ profiles {
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
-        manager.run_async()
+
+        with pytest.raises(CliError, match="nf-snowflake plugin not found in nextflow.config"):
+            manager.run_async()
 
 
 def test_version_validation_plugin_without_version(mock_db):
@@ -218,7 +226,9 @@ profiles {
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
-        manager.run_async()
+
+        with pytest.raises(CliError, match="nf-snowflake plugin version not specified in nextflow.config"):
+            manager.run_async()
 
 
 def test_version_extraction_from_image():
@@ -230,22 +240,22 @@ def test_version_extraction_from_image():
             f.write("""
 profiles {
     test {
-        snowflake { 
-            computePool = 'test' 
+        snowflake {
+            computePool = 'test'
         }
     }
 }
 """)
-            
+
         manager = NextflowManager(project_dir=temp_dir, profile="test")
-        
+
         # Test various image name patterns
         assert manager._extract_version_from_image("nf-snowflake:0.8.0") == "0.8.0"
         assert manager._extract_version_from_image("ghcr.io/snowflake-labs/nf-snowflake:0.7.1") == "0.7.1"
         assert manager._extract_version_from_image("repo/nf-snowflake:1.2.3") == "1.2.3"
         assert manager._extract_version_from_image("nf-snowflake:0.8.0-beta") == "0.8.0-beta"
         assert manager._extract_version_from_image("nf-snowflake:latest") == "latest"
-        
+
         # Test edge cases
         assert manager._extract_version_from_image("nf-snowflake") is None
         assert manager._extract_version_from_image("") is None
