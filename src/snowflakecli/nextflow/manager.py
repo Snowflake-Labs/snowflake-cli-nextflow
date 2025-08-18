@@ -11,7 +11,7 @@ from snowflakecli.nextflow.service_spec import (
     Endpoint,
     StageConfig,
 )
-from dataclasses import dataclass
+
 from snowflake.cli.api.exceptions import CliError
 from snowflake.cli.api.console import cli_console as cc
 import os
@@ -33,15 +33,44 @@ from snowflakecli.nextflow.wss import (
     WebSocketServerError,
 )
 from typing import Optional, Callable
-from snowflakecli.nextflow.parser import NextflowConfigParser
+from snowflakecli.nextflow.config.parser import NextflowConfigParser
 
 
-@dataclass
 class ProjectConfig:
-    computePool: str = ""
-    workDirStage: str = ""
-    volumeConfig: VolumeConfig = None
-    enableStageMountV2: bool = True
+    """Configuration for a Nextflow project."""
+
+    def __init__(
+        self,
+        computePool: str = None,
+        workDirStage: str = None,
+        volumeConfig: VolumeConfig = None,
+        driverImage: str = None,
+    ):
+        self.computePool = computePool
+        self.workDirStage = workDirStage
+        self.volumeConfig = volumeConfig
+        self.driverImage = driverImage
+
+        self._validate_required_fields()
+
+    def _validate_required_fields(self) -> None:
+        """
+        Validate that all required configuration fields are present.
+
+        Raises:
+            CliError: If any required field is missing (None)
+        """
+        # Define required fields - add new required fields here in the future
+        required_fields = [
+            ("computePool", "computePool"),
+            ("workDirStage", "workDirStage"),
+            ("driverImage", "driverImage"),
+        ]
+
+        for field_name, config_key in required_fields:
+            field_value = getattr(self, field_name, None)
+            if field_value is None:
+                raise CliError(f"{config_key} is required but not found in nextflow.config")
 
 
 class NextflowManager(SqlExecutionMixin):
@@ -49,7 +78,6 @@ class NextflowManager(SqlExecutionMixin):
         self,
         project_dir: str,
         profile: str = None,
-        nf_snowflake_image: str = None,
         id_generator: Callable[[], str] = None,
         temp_file_generator: Callable[[str], str] = None,
     ):
@@ -60,7 +88,6 @@ class NextflowManager(SqlExecutionMixin):
             raise CliError(f"Invalid project directory '{project_dir}'")
 
         self._profile = profile
-        self._nf_snowflake_image = nf_snowflake_image
 
         # Use injected temp file generator or default one
         self._temp_file_generator = temp_file_generator or self._default_temp_file_generator
@@ -99,18 +126,18 @@ class NextflowManager(SqlExecutionMixin):
         parser = NextflowConfigParser()
         selected = parser.parse(self._project_dir, self._profile)
 
-        self._validate_plugin_versions(selected)
+        config = ProjectConfig(
+            computePool=selected.get("computePool", None),
+            workDirStage=selected.get("workDirStage", None),
+            driverImage=selected.get("driverImage", None),
+            volumeConfig=parse_stage_mounts(selected.get("stageMounts", None)),
+        )
 
-        config = ProjectConfig()
-        config.computePool = selected.get("computePool", "")
-        config.workDirStage = selected.get("workDirStage", "")
-        config.enableStageMountV2 = selected.get("enableStageMountV2", True)
-        stage_mounts_expr = selected.get("stageMounts", "")
-        config.volumeConfig = parse_stage_mounts(stage_mounts_expr, config.enableStageMountV2)
+        self._validate_plugin_versions(selected.get("plugins", []), config.driverImage)
 
         return config
 
-    def _validate_plugin_versions(self, parsed_config: dict) -> None:
+    def _validate_plugin_versions(self, plugins: list[dict], driver_image: str) -> None:
         """
         Validate that the nf-snowflake plugin version matches the nf_snowflake_image version.
 
@@ -122,7 +149,7 @@ class NextflowManager(SqlExecutionMixin):
         """
         # Find nf-snowflake plugin
         nf_snowflake_plugin = None
-        for plugin in parsed_config.get("plugins", []):
+        for plugin in plugins:
             if plugin.get("name") == "nf-snowflake":
                 nf_snowflake_plugin = plugin
                 break
@@ -137,7 +164,7 @@ class NextflowManager(SqlExecutionMixin):
             raise CliError("nf-snowflake plugin version not specified in nextflow.config")
 
         # Extract version from nf_snowflake_image
-        image_version = self._extract_version_from_image(self._nf_snowflake_image)
+        image_version = self._extract_version_from_image(driver_image)
         if not image_version:
             # Cannot extract version from image, skip validation
             raise CliError("nf_snowflake_image version not specified")
@@ -351,14 +378,10 @@ class NextflowManager(SqlExecutionMixin):
 
         config.volumeConfig.volumeMounts.append(VolumeMount(name="workdir", mountPath=workDir))
 
-        volume = (
-            Volume(
-                name="workdir",
-                source="stage",
-                stageConfig=StageConfig(name="@" + config.workDirStage + "/" + self._run_id + "/", enableSymlink=True),
-            )
-            if config.enableStageMountV2
-            else Volume(name="workdir", source="@" + config.workDirStage + "/" + self._run_id + "/")
+        volume = Volume(
+            name="workdir",
+            source="stage",
+            stageConfig=StageConfig(name="@" + config.workDirStage + "/" + self._run_id + "/", enableSymlink=True),
         )
 
         config.volumeConfig.volumes.append(volume)
@@ -370,7 +393,7 @@ class NextflowManager(SqlExecutionMixin):
                 containers=[
                     Container(
                         name="nf-main",
-                        image=self._nf_snowflake_image,
+                        image=config.driverImage,
                         command=["/bin/bash", "-c", run_script],
                         volumeMounts=config.volumeConfig.volumeMounts,
                     )

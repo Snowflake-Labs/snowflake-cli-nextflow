@@ -76,7 +76,7 @@ class VolumeConfig:
     volumeMounts: list[VolumeMount]
 
 
-def parse_stage_mounts(stage_mounts: str, enable_stage_mount_v2: bool) -> VolumeConfig:
+def parse_stage_mounts(stage_mounts: str) -> VolumeConfig:
     if stage_mounts is None or stage_mounts == "":
         return VolumeConfig(volumes=[], volumeMounts=[])
 
@@ -92,10 +92,8 @@ def parse_stage_mounts(stage_mounts: str, enable_stage_mount_v2: bool) -> Volume
         volume_name = "vol-" + str(index + 1)
         volume_mounts.append(VolumeMount(name=volume_name, mountPath=mount[1]))
 
-        volume = (
-            Volume(name=volume_name, source="stage", stageConfig=StageConfig(name="@" + mount[0], enableSymlink=True))
-            if enable_stage_mount_v2
-            else Volume(name=volume_name, source="@" + mount[0])
+        volume = Volume(
+            name=volume_name, source="stage", stageConfig=StageConfig(name="@" + mount[0], enableSymlink=True)
         )
         volumes.append(volume)
 

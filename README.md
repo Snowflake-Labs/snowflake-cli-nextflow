@@ -43,7 +43,7 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
    ```bash
    snow connection add
    ```
-   Follow the prompts to configure your Snowflake connection with appropriate credentials.
+   Follow the prompts to configure your Snowflake connection
 
 4. **Enable the Nextflow plugin**
    ```bash
@@ -62,18 +62,19 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
        computePool = 'YOUR_COMPUTE_POOL'
        workDirStage = 'WORKDIR_STAGE'
        stageMounts = 'INPUT:/mnt/input,OUTPUT:/mnt/output'
+       driverImage = '/DB/SCHEMA/REPO/nf-snowflake:0.8.0'
    }
    ```
 
 2. **Upload nf-snowflake image into snowflake image repository**
   
    ```bash
-   snow nextflow image push --source ghcr.io/snowflake-labs/nf-snowflake:0.7.1 --target nf_repo --update-config
+   snow nextflow image push --source ghcr.io/snowflake-labs/nf-snowflake:0.8.0 --target nf_repo
    ```
 
 3. **Run your workflow**
    ```bash
-   snow nextflow run /path/to/your/nextflow-project -profile snowflake
+   snow nextflow run /path/to/your/nextflow-project --profile snowflake
    ```
 
 4. **Monitor execution**
@@ -96,6 +97,7 @@ snowflake {
     computePool = 'YOUR_COMPUTE_POOL'
     workDirStage = 'WORKDIR_STAGE'
     stageMounts = 'INPUT:/mnt/input,OUTPUT:/mnt/output'
+    driverImage = '/DB/SCHEMA/REPO/nf-snowflake:0.8.0'
 }
 ```
 
@@ -105,17 +107,9 @@ snowflake {
 
 - **`workDirStage`** (Required): The Snowflake stage name where the plugin will upload your workflow files and store execution artifacts. This stage serves as the working directory for your Nextflow execution.
 
+- **`driverImage`** (Required): The full path to the nf-snowflake image pushed to Snowflake registry. The version of the image should match the version specified in plugins section.
+
 - **`stageMounts`** (Optional): A comma-separated list of stage mounts in the format `STAGE_NAME:/mount/path`. Each mount makes a Snowflake stage available inside the container at the specified path. Use this to provide input data and collect output results.
-
-### Example with Multiple Stage Mounts
-
-```groovy
-snowflake {
-    computePool = 'NEXTFLOW_POOL'
-    workDirStage = 'NF_WORKSPACE'
-    stageMounts = 'RAW_DATA:/mnt/input,RESULTS:/mnt/output,REFERENCES:/mnt/ref'
-}
-```
 
 ## Usage Examples
 
@@ -126,7 +120,7 @@ snowflake {
 snow nextflow run ./my-workflow
 
 # Run with specific profile
-snow nextflow run ./my-workflow -profile snowflake
+snow nextflow run ./my-workflow --profile snowflake
 
 # Check available commands
 snow nextflow --help
