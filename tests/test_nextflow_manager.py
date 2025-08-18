@@ -18,7 +18,7 @@ profiles {
             computePool = 'test'
             workDirStage = 'data_stage'
             stageMounts = 'input:/data/input,output:/data/output'
-            enableStageMountV2 = true
+            driverImage = 'ghcr.io/snowflake-labs/nf-snowflake:0.8.0'
         }
     }
 }
@@ -34,7 +34,6 @@ profiles {
             project_dir=temp_dir,
             profile="test",
             id_generator=lambda: "abc1234",
-            nf_snowflake_image="ghcr.io/snowflake-labs/nf-snowflake:0.8.0",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
         manager.run_async()
@@ -114,6 +113,7 @@ profiles {
         snowflake {
             computePool = 'test_pool'
             workDirStage = 'test_stage'
+            driverImage = 'ghcr.io/snowflake-labs/nf-snowflake:0.8.0'
         }
     }
 }
@@ -127,7 +127,6 @@ profiles {
         manager = NextflowManager(
             project_dir=temp_dir,
             profile="test",
-            nf_snowflake_image="ghcr.io/snowflake-labs/nf-snowflake:0.8.0",
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
@@ -146,6 +145,7 @@ profiles {
         snowflake {
             computePool = 'test_pool'
             workDirStage = 'test_stage'
+            driverImage = 'ghcr.io/snowflake-labs/nf-snowflake:0.7.0'
         }
     }
 }
@@ -160,7 +160,6 @@ profiles {
             manager = NextflowManager(
                 project_dir=temp_dir,
                 profile="test",
-                nf_snowflake_image="ghcr.io/snowflake-labs/nf-snowflake:0.7.1",
                 id_generator=lambda: "abc1234",
                 temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
             )
@@ -175,6 +174,7 @@ profiles {
         snowflake {
             computePool = 'test_pool'
             workDirStage = 'test_stage'
+            driverImage = 'ghcr.io/snowflake-labs/nf-snowflake:0.8.0'
         }
     }
 }
@@ -188,7 +188,6 @@ profiles {
         manager = NextflowManager(
             project_dir=temp_dir,
             profile="test",
-            nf_snowflake_image="ghcr.io/snowflake-labs/nf-snowflake:0.8.0",
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
@@ -209,6 +208,7 @@ profiles {
         snowflake {
             computePool = 'test_pool'
             workDirStage = 'test_stage'
+            driverImage = 'ghcr.io/snowflake-labs/nf-snowflake:0.8.0'
         }
     }
 }
@@ -222,7 +222,6 @@ profiles {
         manager = NextflowManager(
             project_dir=temp_dir,
             profile="test",
-            nf_snowflake_image="ghcr.io/snowflake-labs/nf-snowflake:0.8.0",
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )

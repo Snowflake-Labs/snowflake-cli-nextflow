@@ -1,7 +1,7 @@
 import tempfile
 import os
 import pytest
-from snowflakecli.nextflow.parser import NextflowConfigParser
+from snowflakecli.nextflow.config.parser import NextflowConfigParser
 
 
 class TestNextflowConfigParser:
