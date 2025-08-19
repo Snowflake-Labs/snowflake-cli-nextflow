@@ -303,3 +303,70 @@ profiles {
             # Request non-existent profile should return empty config
             result = self.parser.parse(temp_dir, "nonexistent")
             assert result == {}
+
+    def test_parse_comma_separated_profiles(self):
+        """Test parsing with comma-separated multiple profiles."""
+        config_text = """
+// Global config
+snowflake {
+    computePool = 'global_pool'
+    workDirStage = 'global_stage'
+    stageMounts = 'global:/data'
+    enableStageMountV2 = false
+}
+
+profiles {
+    dev {
+        snowflake {
+            computePool = 'dev_pool'
+            enableStageMountV2 = true
+        }
+    }
+    test {
+        snowflake.workDirStage = 'test_stage'
+        snowflake.stageMounts = 'test:/data/test'
+    }
+    prod {
+        snowflake {
+            computePool = 'prod_pool'
+            workDirStage = 'prod_stage'
+            stageMounts = 'prod:/data/prod'
+            enableStageMountV2 = false
+        }
+    }
+}
+"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "nextflow.config")
+            with open(config_path, "w") as f:
+                f.write(config_text)
+
+            # Test with comma-separated profiles: dev,test
+            # dev profile should be applied first, then test profile overrides
+            result = self.parser.parse(temp_dir, "dev,test")
+
+            # Global config is applied first
+            # Then dev profile: computePool='dev_pool', enableStageMountV2=true
+            # Then test profile: workDirStage='test_stage', stageMounts='test:/data/test'
+            assert result["computePool"] == "dev_pool"  # From dev profile
+            assert result["workDirStage"] == "test_stage"  # From test profile (overrides global)
+            assert result["stageMounts"] == "test:/data/test"  # From test profile (overrides global)
+            assert result["enableStageMountV2"] is True  # From dev profile (overrides global)
+
+            # Test with different order: test,dev
+            # test profile should be applied first, then dev profile overrides
+            result2 = self.parser.parse(temp_dir, "test,dev")
+
+            assert result2["computePool"] == "dev_pool"  # From dev profile (overrides global)
+            assert result2["workDirStage"] == "test_stage"  # From test profile (dev doesn't override this)
+            assert result2["stageMounts"] == "test:/data/test"  # From test profile (dev doesn't override this)
+            assert result2["enableStageMountV2"] is True  # From dev profile
+
+            # Test with three profiles: dev,test,prod
+            result3 = self.parser.parse(temp_dir, "dev,test,prod")
+
+            # prod profile should override everything since it's last
+            assert result3["computePool"] == "prod_pool"
+            assert result3["workDirStage"] == "prod_stage"
+            assert result3["stageMounts"] == "prod:/data/prod"
+            assert result3["enableStageMountV2"] is False

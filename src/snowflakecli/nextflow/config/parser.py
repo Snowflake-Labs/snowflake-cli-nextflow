@@ -19,7 +19,7 @@ class NextflowConfigParser:
 
         Args:
                 project_dir: Directory containing nextflow.config file
-                profile: Optional profile name to extract config from
+                profile: Optional profile name(s) to extract config from (comma-separated for multiple)
 
         Returns:
                 Dictionary containing snowflake configuration values and plugins information
@@ -36,8 +36,13 @@ class NextflowConfigParser:
             tree = parse_groovy_content(config_text)
             t_tree = digest_lark_tree(tree)
 
+            # Parse profiles into a list if comma-separated
+            profiles = []
+            if profile:
+                profiles = [p.strip() for p in profile.split(",") if p.strip()]
+
             # Extract snowflake configuration
-            snowflake_config = self._extract_snowflake_config(t_tree, profile)
+            snowflake_config = self._extract_snowflake_config(t_tree, profiles)
 
             # Extract plugins configuration (always from global scope)
             plugins_config = self._extract_plugins_config(t_tree)
@@ -52,17 +57,18 @@ class NextflowConfigParser:
         except Exception as e:
             raise RuntimeError(f"Failed to parse nextflow.config: {e}")
 
-    def _extract_snowflake_config(self, tree: Dict[str, Any], profile: Optional[str] = None) -> Dict[str, Any]:
+    def _extract_snowflake_config(self, tree: Dict[str, Any], profiles: List[str] = None) -> Dict[str, Any]:
         """Extract snowflake configuration from the parsed AST tree."""
         config = {}
 
         # First, look for global snowflake configuration
         config.update(self._extract_global_snowflake_config(tree))
 
-        # If profile is specified, look for profile-specific configuration
-        if profile:
-            profile_config = self._extract_profile_snowflake_config(tree, profile)
-            config.update(profile_config)  # Profile config overrides global
+        # If profiles are specified, apply them in order (later profiles override earlier ones)
+        if profiles:
+            for profile in profiles:
+                profile_config = self._extract_profile_snowflake_config(tree, profile)
+                config.update(profile_config)  # Each profile config overrides previous
 
         return config
 
