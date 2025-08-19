@@ -33,6 +33,7 @@ profiles {
         manager = NextflowManager(
             project_dir=temp_dir,
             profile="test",
+            params=["param1='value1'", "param2='value2'"],
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
@@ -67,9 +68,10 @@ spec:
     - "\\n        mkdir -p /mnt/project\\n        cd /mnt/project\\n        tar -zxf\\
       \\ /mnt/workdir/tmp1234.tar.gz\\n\\n        nextflow run . -name abc1234 -ansi-log\\
       \\ False -profile test -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace\\
-      \\ /tmp/trace.txt -with-timeline /tmp/timeline.html\\n        cp /tmp/report.html\\
-      \\ /mnt/workdir/report.html\\n        cp /tmp/trace.txt /mnt/workdir/trace.txt\\n\\
-      \\        cp /tmp/timeline.html /mnt/workdir/timeline.html\\n        "
+      \\ /tmp/trace.txt -with-timeline /tmp/timeline.html --param1 'value1' --param2\\
+      \\ 'value2'\\n        cp /tmp/report.html /mnt/workdir/report.html\\n        cp\\
+      \\ /tmp/trace.txt /mnt/workdir/trace.txt\\n        cp /tmp/timeline.html /mnt/workdir/timeline.html\\n\\
+      \\        "
     image: ghcr.io/snowflake-labs/nf-snowflake:0.8.0
     name: nf-main
     volumeMounts:

@@ -78,6 +78,7 @@ class NextflowManager(SqlExecutionMixin):
         self,
         project_dir: str,
         profile: str = None,
+        params: list[str] = [],
         id_generator: Callable[[], str] = None,
         temp_file_generator: Callable[[str], str] = None,
     ):
@@ -95,6 +96,8 @@ class NextflowManager(SqlExecutionMixin):
         # Use injected ID generator or default one
         self._run_id = id_generator() if id_generator else self._generate_run_id()
         self.service_name = f"NXF_MAIN_{self._run_id}"
+
+        self._params = params
 
     def _default_temp_file_generator(self, suffix: str) -> str:
         """
@@ -362,6 +365,11 @@ class NextflowManager(SqlExecutionMixin):
             "-with-timeline",
             "/tmp/timeline.html",
         ]
+
+        for param in self._params:
+            param_key, param_value = param.split("=")
+            nf_run_cmds.append(f"--{param_key}")
+            nf_run_cmds.append(param_value)
 
         # if not async, we need to run the pty server to get the logs
         python_pty_server_cmd = "python3 /app/pty_server.py -- " if not is_async else ""

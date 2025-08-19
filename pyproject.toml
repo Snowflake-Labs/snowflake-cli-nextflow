@@ -38,7 +38,7 @@ classifiers = [
     "Topic :: System :: Distributed Computing"
 ]
 dependencies = [
-    "snowflake-cli>=3.0.0",
+    "snowflake-cli>=3.10.0",
     "pyyaml",
     "websockets",
     "docker",
