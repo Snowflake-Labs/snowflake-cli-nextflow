@@ -27,13 +27,18 @@ def run_workflow(
         "--async",
         help="Run workflow asynchronously without waiting for completion",
     ),
+    params: list[str] = typer.Option(
+        [],
+        "--param",
+        help="Parameters to pass to the workflow",
+    ),
     **options,
 ) -> CommandResult:
     """
     Run a Nextflow workflow in Snowpark Container Service.
     """
 
-    manager = NextflowManager(project_dir, profile)
+    manager = NextflowManager(project_dir, profile, params)
 
     if async_run is not None and async_run:
         result = manager.run_async()
