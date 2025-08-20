@@ -67,7 +67,6 @@ class ProjectConfig:
             ("computePool", "computePool"),
             ("workDirStage", "workDirStage"),
             ("driverImage", "driverImage"),
-            ("eai", "externalAccessIntegrations"),
         ]
 
         for field_name, config_key in required_fields:
@@ -136,7 +135,7 @@ class NextflowManager(SqlExecutionMixin):
             computePool=selected.get("computePool", None),
             workDirStage=selected.get("workDirStage", None),
             driverImage=selected.get("driverImage", None),
-            eai=selected.get("externalAccessIntegrations", None),
+            eai=selected.get("externalAccessIntegrations", ""),
             volumeConfig=parse_stage_mounts(selected.get("stageMounts", None)),
         )
 
