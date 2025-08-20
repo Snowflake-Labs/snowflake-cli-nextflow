@@ -45,11 +45,13 @@ class ProjectConfig:
         workDirStage: str = None,
         volumeConfig: VolumeConfig = None,
         driverImage: str = None,
+        eai: str = None,
     ):
         self.computePool = computePool
         self.workDirStage = workDirStage
         self.volumeConfig = volumeConfig
         self.driverImage = driverImage
+        self.eai = eai
 
         self._validate_required_fields()
 
@@ -133,6 +135,7 @@ class NextflowManager(SqlExecutionMixin):
             computePool=selected.get("computePool", None),
             workDirStage=selected.get("workDirStage", None),
             driverImage=selected.get("driverImage", None),
+            eai=selected.get("externalAccessIntegrations", ""),
             volumeConfig=parse_stage_mounts(selected.get("stageMounts", None)),
         )
 
@@ -419,6 +422,7 @@ class NextflowManager(SqlExecutionMixin):
 EXECUTE JOB SERVICE
 IN COMPUTE POOL {config.computePool}
 NAME = {self.service_name}
+EXTERNAL_ACCESS_INTEGRATIONS = ({config.eai})
 FROM SPECIFICATION $$
 {yaml_spec}
 $$
@@ -427,6 +431,7 @@ $$
             execute_sql = f"""
 CREATE SERVICE {self.service_name}
 IN COMPUTE POOL {config.computePool}
+EXTERNAL_ACCESS_INTEGRATIONS = ({config.eai})
 FROM SPECIFICATION $$
 {yaml_spec}
 $$

@@ -18,6 +18,7 @@ profiles {
             computePool = 'test'
             workDirStage = 'data_stage'
             stageMounts = 'input:/data/input,output:/data/output'
+            externalAccessIntegrations = 'test_eai'
             driverImage = 'ghcr.io/snowflake-labs/nf-snowflake:0.8.0'
         }
     }
@@ -59,6 +60,7 @@ profiles {
 EXECUTE JOB SERVICE
 IN COMPUTE POOL test
 NAME = NXF_MAIN_abc1234
+EXTERNAL_ACCESS_INTEGRATIONS = (test_eai)
 FROM SPECIFICATION $$
 spec:
   containers:
