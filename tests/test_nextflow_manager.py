@@ -67,13 +67,26 @@ spec:
   - command:
     - /bin/bash
     - -c
-    - "\\n        mkdir -p /mnt/project\\n        cd /mnt/project\\n        tar -zxf\\
-      \\ /mnt/workdir/tmp1234.tar.gz\\n\\n        nextflow run . -name abc1234 -ansi-log\\
-      \\ False -profile test -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace\\
-      \\ /tmp/trace.txt -with-timeline /tmp/timeline.html --param1 'value1' --param2\\
-      \\ 'value2'\\n        cp /tmp/report.html /mnt/workdir/report.html\\n        cp\\
-      \\ /tmp/trace.txt /mnt/workdir/trace.txt\\n        cp /tmp/timeline.html /mnt/workdir/timeline.html\\n\\
-      \\        "
+    - '
+
+      mkdir -p /mnt/project && cd /mnt/project
+
+      tar -zxf /mnt/workdir/tmp1234.tar.gz
+
+      cp -r /mnt/project/ /mnt/workdir/
+
+
+      nextflow run /mnt/workdir/project/ -name abc1234 -ansi-log False -profile test
+      -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace /tmp/trace.txt
+      -with-timeline /tmp/timeline.html --param1 ''value1'' --param2 ''value2''
+
+      cp /tmp/report.html /mnt/workdir/report.html
+
+      cp /tmp/trace.txt /mnt/workdir/trace.txt
+
+      cp /tmp/timeline.html /mnt/workdir/timeline.html
+
+      '
     image: ghcr.io/snowflake-labs/nf-snowflake:0.8.0
     name: nf-main
     volumeMounts:

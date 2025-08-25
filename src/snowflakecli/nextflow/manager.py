@@ -10,6 +10,7 @@ from snowflakecli.nextflow.service_spec import (
     Volume,
     Endpoint,
     StageConfig,
+    ReadinessProbe,
 )
 
 from snowflake.cli.api.exceptions import CliError
@@ -311,7 +312,7 @@ class NextflowManager(SqlExecutionMixin):
             wss_client = WebSocketClient(
                 conn=self._conn, message_callback=on_message, status_callback=on_status, error_callback=on_error
             )
-            exit_code = asyncio.run(wss_client.connect_and_stream("wss://" + wss_url))
+            exit_code = asyncio.run(wss_client.connect_and_stream("wss://" + wss_url + "/ws"))
         except WebSocketInvalidURIError as e:
             raise CliError(f"Invalid WebSocket URL: {e}")
         except WebSocketAuthenticationError as e:
@@ -352,7 +353,7 @@ class NextflowManager(SqlExecutionMixin):
         nf_run_cmds = [
             "nextflow",
             "run",
-            ".",
+            f"{workDir}/project/",
             "-name",
             self._run_id,
             "-ansi-log",
@@ -377,15 +378,15 @@ class NextflowManager(SqlExecutionMixin):
         # if not async, we need to run the pty server to get the logs
         python_pty_server_cmd = "python3 /app/pty_server.py -- " if not is_async else ""
         run_script = f"""
-        mkdir -p /mnt/project
-        cd /mnt/project
-        tar -zxf {workDir}/{tarball_filename}
+mkdir -p /mnt/project && cd /mnt/project
+tar -zxf {workDir}/{tarball_filename}
+cp -r /mnt/project/ {workDir}/
 
-        {python_pty_server_cmd}{" ".join(nf_run_cmds)}
-        cp /tmp/report.html /mnt/workdir/report.html
-        cp /tmp/trace.txt /mnt/workdir/trace.txt
-        cp /tmp/timeline.html /mnt/workdir/timeline.html
-        """
+{python_pty_server_cmd}{" ".join(nf_run_cmds)}
+cp /tmp/report.html /mnt/workdir/report.html
+cp /tmp/trace.txt /mnt/workdir/trace.txt
+cp /tmp/timeline.html /mnt/workdir/timeline.html
+"""
 
         config.volumeConfig.volumeMounts.append(VolumeMount(name="workdir", mountPath=workDir))
 
@@ -407,6 +408,7 @@ class NextflowManager(SqlExecutionMixin):
                         image=config.driverImage,
                         command=["/bin/bash", "-c", run_script],
                         volumeMounts=config.volumeConfig.volumeMounts,
+                        readinessProbe=ReadinessProbe(port=8765, path="/healthz") if not is_async else None,
                     )
                 ],
                 volumes=config.volumeConfig.volumes,
@@ -469,7 +471,7 @@ $$
         cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
 
         try:
-            self.execute_query(f"call system$wait_for_services(30, '{self.service_name}')")
+            self.execute_query(f"call system$wait_for_services(60, '{self.service_name}')")
             self.execute_query("alter session unset query_tag")
 
             # Stream logs and get exit code
