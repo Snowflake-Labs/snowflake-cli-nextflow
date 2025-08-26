@@ -62,14 +62,14 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
        computePool = 'YOUR_COMPUTE_POOL'
        workDirStage = 'WORKDIR_STAGE'
        stageMounts = 'INPUT:/mnt/input,OUTPUT:/mnt/output'
-       driverImage = '/DB/SCHEMA/REPO/nf-snowflake:0.8.0'
+       driverImage = '/DB/SCHEMA/REPO/nf-snowflake:0.8.3'
    }
    ```
 
 2. **Upload nf-snowflake image into snowflake image repository**
   
    ```bash
-   snow nextflow image push --source ghcr.io/snowflake-labs/nf-snowflake:0.8.0 --target nf_repo
+   snow nextflow image push --source ghcr.io/snowflake-labs/nf-snowflake:0.8.3 --target nf_repo
    ```
 
 3. **Run your workflow**
@@ -91,13 +91,13 @@ This plugin extends the Snowflake CLI with Nextflow workflow capabilities, allow
 Your `nextflow.config` must include the following Snowflake-specific settings:
 
 ```groovy
-plugins { id 'nf-snowflake@0.8.0' }
+plugins { id 'nf-snowflake@0.8.3' }
 
 snowflake {
     computePool = 'YOUR_COMPUTE_POOL'
     workDirStage = 'WORKDIR_STAGE'
     stageMounts = 'INPUT:/mnt/input,OUTPUT:/mnt/output'
-    driverImage = '/DB/SCHEMA/REPO/nf-snowflake:0.8.0'
+    driverImage = '/DB/SCHEMA/REPO/nf-snowflake:0.8.3'
 }
 ```
 

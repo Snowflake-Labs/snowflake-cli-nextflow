@@ -10,11 +10,18 @@ class VolumeMount:
 
 
 @dataclass
+class ReadinessProbe:
+    port: int
+    path: str
+
+
+@dataclass
 class Container:
     name: str
     image: str
     command: list[str]
     volumeMounts: list[VolumeMount]
+    readinessProbe: ReadinessProbe = None
 
 
 @dataclass
