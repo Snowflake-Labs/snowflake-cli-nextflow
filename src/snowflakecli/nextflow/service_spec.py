@@ -8,10 +8,12 @@ class VolumeMount:
     name: str
     mountPath: str
 
+
 @dataclass
 class ReadinessProbe:
     port: int
     path: str
+
 
 @dataclass
 class Container:
@@ -20,6 +22,7 @@ class Container:
     command: list[str]
     volumeMounts: list[VolumeMount]
     readinessProbe: ReadinessProbe = None
+
 
 @dataclass
 class StageConfig:
@@ -40,11 +43,13 @@ class Endpoint:
     port: int
     public: bool
 
+
 @dataclass
 class Spec:
     containers: list[Container]
     volumes: list[Volume]
     endpoints: list[Endpoint]
+
 
 @dataclass
 class Specification:
