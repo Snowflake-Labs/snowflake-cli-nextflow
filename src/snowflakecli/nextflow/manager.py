@@ -5,7 +5,6 @@ from snowflakecli.nextflow.service_spec import (
     Spec,
     Container,
     parse_stage_mounts,
-    VolumeConfig,
     VolumeMount,
     Volume,
     Endpoint,
@@ -35,53 +34,13 @@ from snowflakecli.nextflow.wss import (
 )
 from typing import Optional, Callable
 from snowflakecli.nextflow.config.parser import NextflowConfigParser
-
-
-class ProjectConfig:
-    """Configuration for a Nextflow project."""
-
-    def __init__(
-        self,
-        computePool: str = None,
-        workDirStage: str = None,
-        volumeConfig: VolumeConfig = None,
-        driverImage: str = None,
-        eai: str = None,
-    ):
-        self.computePool = computePool
-        self.workDirStage = workDirStage
-        self.volumeConfig = volumeConfig
-        self.driverImage = driverImage
-        self.eai = eai
-
-        self._validate_required_fields()
-
-    def _validate_required_fields(self) -> None:
-        """
-        Validate that all required configuration fields are present.
-
-        Raises:
-            CliError: If any required field is missing (None)
-        """
-        # Define required fields - add new required fields here in the future
-        required_fields = [
-            ("computePool", "computePool"),
-            ("workDirStage", "workDirStage"),
-            ("driverImage", "driverImage"),
-        ]
-
-        for field_name, config_key in required_fields:
-            field_value = getattr(self, field_name, None)
-            if field_value is None:
-                raise CliError(f"{config_key} is required but not found in nextflow.config")
-
+from snowflakecli.nextflow.config.project import ProjectConfig
 
 class NextflowManager(SqlExecutionMixin):
     def __init__(
         self,
         project_dir: str,
         profile: str = None,
-        params: list[str] = [],
         id_generator: Callable[[], str] = None,
         temp_file_generator: Callable[[str], str] = None,
     ):
@@ -99,8 +58,6 @@ class NextflowManager(SqlExecutionMixin):
         # Use injected ID generator or default one
         self._run_id = id_generator() if id_generator else self._generate_run_id()
         self.service_name = f"NXF_MAIN_{self._run_id}"
-
-        self._params = params
 
     def _default_temp_file_generator(self, suffix: str) -> str:
         """
@@ -331,7 +288,7 @@ class NextflowManager(SqlExecutionMixin):
 
         return exit_code
 
-    def _submit_nextflow_job(self, config: ProjectConfig, tarball_path: str, is_async: bool) -> SnowflakeCursor:
+    def _submit_nextflow_job(self, config: ProjectConfig, tarball_path: str, is_async: bool, params: list[str] = []) -> SnowflakeCursor:
         """
         Run the nextflow pipeline.
 
@@ -370,7 +327,7 @@ class NextflowManager(SqlExecutionMixin):
             "/tmp/timeline.html",
         ]
 
-        for param in self._params:
+        for param in params:
             param_key, param_value = param.split("=")
             nf_run_cmds.append(f"--{param_key}")
             nf_run_cmds.append(param_value)
@@ -379,7 +336,7 @@ class NextflowManager(SqlExecutionMixin):
         python_pty_server_cmd = "python3 /app/pty_server.py -- " if not is_async else ""
         run_script = f"""
 mkdir -p /mnt/project && cd /mnt/project
-tar -zxf {workDir}/{tarball_filename}
+tar -zxf {workDir}/{tarball_filename} 2>/dev/null
 cp -r /mnt/project/ {workDir}/
 
 {python_pty_server_cmd}{" ".join(nf_run_cmds)}
@@ -440,7 +397,7 @@ $$
         """
         return self.execute_query(execute_sql, _exec_async=is_async)
 
-    def run_async(self) -> str:
+    def run_async(self, params: list[str] = []) -> str:
         """
         Run a Nextflow workflow asynchronously.
 
@@ -455,10 +412,10 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, True)
+        cursor = self._submit_nextflow_job(config, tarball_path, True, params)
         return cursor.sfqid
 
-    def run(self) -> Optional[int]:
+    def run(self, params: list[str] = []) -> Optional[int]:
         cc.step("Parsing nextflow.config...")
         config = self._parse_config()
 
@@ -467,7 +424,7 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, False)
+        cursor = self._submit_nextflow_job(config, tarball_path, False, params)
         cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
 
         try:
@@ -479,3 +436,73 @@ $$
             return exit_code
         finally:
             self.execute_query("drop service if exists " + self.service_name)
+
+    def _run_nextflow_inspect(self, config: ProjectConfig, tarball_path: str) -> None:
+        """
+        Run the nextflow inspect command.
+        """
+        workDir = "/mnt/workdir"
+        tarball_filename = os.path.basename(tarball_path)
+
+        nf_inspect_cmds = [
+            "nextflow",
+            "inspect",
+            "."
+        ]
+
+        run_script = f"""
+mkdir -p /mnt/project && cd /mnt/project
+tar -zxf {workDir}/{tarball_filename} 2>/dev/null
+
+{" ".join(nf_inspect_cmds)}
+"""
+
+        volumeMount = VolumeMount(name="workdir", mountPath=workDir)
+        volume = Volume(
+            name="workdir",
+            source="stage",
+            stageConfig=StageConfig(name="@" + config.workDirStage + "/" + self._run_id + "/", enableSymlink=True),
+        )
+
+        config.volumeConfig.volumes.append(volume)
+        spec = Specification(
+            spec=Spec(
+                containers=[
+                    Container(
+                        name="nf-inspect",
+                        image=config.driverImage,
+                        command=["/bin/bash", "-c", run_script],
+                        volumeMounts=[volumeMount],
+                    )
+                ],
+                volumes=[volume],
+                endpoints=None,
+            ),
+        )
+
+        yaml_spec = spec.to_yaml()
+        self.execute_query(f"""
+EXECUTE JOB SERVICE
+IN COMPUTE POOL {config.computePool}
+NAME = {self.service_name}
+EXTERNAL_ACCESS_INTEGRATIONS = ({config.eai})
+FROM SPECIFICATION $$
+{yaml_spec}
+$$
+"""
+        )
+
+        cursor = self.execute_query(f"select system$get_service_logs('{self.service_name}', 0, 'nf-inspect')")
+        return cursor.fetchone()[0]
+
+    def replicate_image(self):
+        cc.step("Parsing nextflow.config...")
+        config = self._parse_config()
+
+        tarball_path = None
+        with cc.phase("Uploading project to Snowflake..."):
+            tarball_path = self._upload_project(config)
+
+        cc.step("Submitting nextflow job to Snowflake...")
+        data = self._run_nextflow_inspect(config, tarball_path)
+        print(data)
