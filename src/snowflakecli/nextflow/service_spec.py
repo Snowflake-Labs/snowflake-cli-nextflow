@@ -48,6 +48,7 @@ class Endpoint:
 class LogExporters:
     eventTableConfig: dict
 
+
 @dataclass
 class Spec:
     containers: list[Container]

@@ -4,7 +4,6 @@ from snowflake.cli.api.output.types import CommandResult, MessageResult
 from snowflake.cli.api.exceptions import CliError
 from snowflakecli.nextflow.manager import NextflowManager
 from snowflakecli.nextflow.image.commands import app as image_app
-from typing import Optional
 
 app = SnowTyperFactory(
     name="nextflow",
@@ -32,11 +31,7 @@ def run_workflow(
         "--param",
         help="Parameters to pass to the workflow",
     ),
-    log: bool = typer.Option(
-        False,
-        "--log",
-        help="Enable .nextflow.log emitted to event table"
-    ),
+    log: bool = typer.Option(False, "--log", help="Enable .nextflow.log emitted to event table"),
     quiet: bool = typer.Option(
         False,
         "-q",
@@ -53,7 +48,7 @@ def run_workflow(
     if async_run is not None and async_run:
         result = manager.run_async(params, log, quiet)
         # For async runs, result should contain service information
-        return MessageResult(f"Nextflow workflow submitted successfully. Check Snowsight for status.")
+        return MessageResult("Nextflow workflow submitted successfully. Check Snowsight for status.")
     else:
         result = manager.run(params, log, quiet)
         # For sync runs, result should be exit code

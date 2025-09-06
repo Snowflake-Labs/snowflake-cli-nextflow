@@ -329,13 +329,9 @@ class NextflowManager(SqlExecutionMixin):
 
         return exit_code
 
-    def _submit_nextflow_job(self, 
-                             config: ProjectConfig, 
-                             tarball_path: str, 
-                             is_async: bool, 
-                             params: list[str],
-                             log: bool,
-                             quiet: bool) -> SnowflakeCursor:
+    def _submit_nextflow_job(
+        self, config: ProjectConfig, tarball_path: str, is_async: bool, params: list[str], log: bool, quiet: bool
+    ) -> SnowflakeCursor:
         """
         Run the nextflow pipeline.
 
@@ -354,30 +350,32 @@ class NextflowManager(SqlExecutionMixin):
         workDir = "/mnt/workdir"
         tarball_filename = os.path.basename(tarball_path)
 
-        nf_run_cmds = [ "nextflow" ]
+        nf_run_cmds = ["nextflow"]
         if quiet:
             nf_run_cmds.append("-q")
         if log:
             nf_run_cmds.extend(["-log", "/dev/stderr"])
 
-        nf_run_cmds.extend([
-            "run",
-            f"{workDir}/project/",
-            "-name",
-            self._run_id,
-            "-ansi-log",
-            str(not is_async),
-            "-profile",
-            self._profile,
-            "-work-dir",
-            workDir,
-            "-with-report",
-            "/tmp/report.html",
-            "-with-trace",
-            "/tmp/trace.txt",
-            "-with-timeline",
-            "/tmp/timeline.html",
-        ])
+        nf_run_cmds.extend(
+            [
+                "run",
+                f"{workDir}/project/",
+                "-name",
+                self._run_id,
+                "-ansi-log",
+                str(not is_async),
+                "-profile",
+                self._profile,
+                "-work-dir",
+                workDir,
+                "-with-report",
+                "/tmp/report.html",
+                "-with-trace",
+                "/tmp/trace.txt",
+                "-with-timeline",
+                "/tmp/timeline.html",
+            ]
+        )
 
         for param in params:
             param_key, param_value = param.split("=")
@@ -398,7 +396,6 @@ cp /tmp/timeline.html /mnt/workdir/timeline.html
 """
         if is_async:
             run_script += "echo 'nextflow command finished successfully'"
-
 
         config.volumeConfig.volumeMounts.append(VolumeMount(name="workdir", mountPath=workDir))
 
@@ -425,9 +422,7 @@ cp /tmp/timeline.html /mnt/workdir/timeline.html
                 ],
                 volumes=config.volumeConfig.volumes,
                 endpoints=endpoints,
-                logExporters=LogExporters(eventTableConfig={
-                    "logLevel": "INFO"
-                }),
+                logExporters=LogExporters(eventTableConfig={"logLevel": "INFO"}),
             )
         )
 
