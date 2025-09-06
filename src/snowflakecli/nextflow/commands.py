@@ -4,7 +4,6 @@ from snowflake.cli.api.output.types import CommandResult, MessageResult
 from snowflake.cli.api.exceptions import CliError
 from snowflakecli.nextflow.manager import NextflowManager
 from snowflakecli.nextflow.image.commands import app as image_app
-from typing import Optional
 
 app = SnowTyperFactory(
     name="nextflow",
@@ -22,7 +21,7 @@ def run_workflow(
         "--profile",
         help="Nextflow profile to use for the workflow execution",
     ),
-    async_run: Optional[bool] = typer.Option(
+    async_run: bool = typer.Option(
         False,
         "--async",
         help="Run workflow asynchronously without waiting for completion",
@@ -32,20 +31,26 @@ def run_workflow(
         "--param",
         help="Parameters to pass to the workflow",
     ),
+    log: bool = typer.Option(False, "--log", help="Enable .nextflow.log emitted to event table"),
+    quiet: bool = typer.Option(
+        False,
+        "-q",
+        help="Suppress all output except for error messages",
+    ),
     **options,
 ) -> CommandResult:
     """
     Run a Nextflow workflow in Snowpark Container Service.
     """
 
-    manager = NextflowManager(project_dir, profile, params)
+    manager = NextflowManager(project_dir, profile)
 
     if async_run is not None and async_run:
-        result = manager.run_async()
+        result = manager.run_async(params, log, quiet)
         # For async runs, result should contain service information
-        return MessageResult(f"Nextflow workflow submitted successfully. Query ID: {result}")
+        return MessageResult("Nextflow workflow submitted successfully. Check Snowsight for status.")
     else:
-        result = manager.run()
+        result = manager.run(params, log, quiet)
         # For sync runs, result should be exit code
         if result is not None:
             if result == 0:
