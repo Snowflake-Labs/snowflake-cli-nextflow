@@ -11,6 +11,7 @@ from snowflakecli.nextflow.service_spec import (
     Endpoint,
     StageConfig,
     ReadinessProbe,
+    LogExporters,
 )
 
 from snowflake.cli.api.exceptions import CliError
@@ -81,7 +82,6 @@ class NextflowManager(SqlExecutionMixin):
         self,
         project_dir: str,
         profile: str = None,
-        params: list[str] = [],
         id_generator: Callable[[], str] = None,
         temp_file_generator: Callable[[str], str] = None,
     ):
@@ -99,8 +99,6 @@ class NextflowManager(SqlExecutionMixin):
         # Use injected ID generator or default one
         self._run_id = id_generator() if id_generator else self._generate_run_id()
         self.service_name = f"NXF_MAIN_{self._run_id}"
-
-        self._params = params
 
     def _default_temp_file_generator(self, suffix: str) -> str:
         """
@@ -331,7 +329,13 @@ class NextflowManager(SqlExecutionMixin):
 
         return exit_code
 
-    def _submit_nextflow_job(self, config: ProjectConfig, tarball_path: str, is_async: bool) -> SnowflakeCursor:
+    def _submit_nextflow_job(self, 
+                             config: ProjectConfig, 
+                             tarball_path: str, 
+                             is_async: bool, 
+                             params: list[str],
+                             log: bool,
+                             quiet: bool) -> SnowflakeCursor:
         """
         Run the nextflow pipeline.
 
@@ -350,8 +354,13 @@ class NextflowManager(SqlExecutionMixin):
         workDir = "/mnt/workdir"
         tarball_filename = os.path.basename(tarball_path)
 
-        nf_run_cmds = [
-            "nextflow",
+        nf_run_cmds = [ "nextflow" ]
+        if quiet:
+            nf_run_cmds.append("-q")
+        if log:
+            nf_run_cmds.extend(["-log", "/dev/stderr"])
+
+        nf_run_cmds.extend([
             "run",
             f"{workDir}/project/",
             "-name",
@@ -368,9 +377,9 @@ class NextflowManager(SqlExecutionMixin):
             "/tmp/trace.txt",
             "-with-timeline",
             "/tmp/timeline.html",
-        ]
+        ])
 
-        for param in self._params:
+        for param in params:
             param_key, param_value = param.split("=")
             nf_run_cmds.append(f"--{param_key}")
             nf_run_cmds.append(param_value)
@@ -379,7 +388,7 @@ class NextflowManager(SqlExecutionMixin):
         python_pty_server_cmd = "python3 /app/pty_server.py -- " if not is_async else ""
         run_script = f"""
 mkdir -p /mnt/project && cd /mnt/project
-tar -zxf {workDir}/{tarball_filename}
+tar -zxf {workDir}/{tarball_filename} 2>/dev/null
 cp -r /mnt/project/ {workDir}/
 
 {python_pty_server_cmd}{" ".join(nf_run_cmds)}
@@ -387,6 +396,9 @@ cp /tmp/report.html /mnt/workdir/report.html
 cp /tmp/trace.txt /mnt/workdir/trace.txt
 cp /tmp/timeline.html /mnt/workdir/timeline.html
 """
+        if is_async:
+            run_script += "echo 'nextflow command finished successfully'"
+
 
         config.volumeConfig.volumeMounts.append(VolumeMount(name="workdir", mountPath=workDir))
 
@@ -406,13 +418,16 @@ cp /tmp/timeline.html /mnt/workdir/timeline.html
                     Container(
                         name="nf-main",
                         image=config.driverImage,
-                        command=["/bin/bash", "-c", run_script],
+                        command=["/bin/bash", "-e", "-c", run_script],
                         volumeMounts=config.volumeConfig.volumeMounts,
                         readinessProbe=ReadinessProbe(port=8765, path="/healthz") if not is_async else None,
                     )
                 ],
                 volumes=config.volumeConfig.volumes,
                 endpoints=endpoints,
+                logExporters=LogExporters(eventTableConfig={
+                    "logLevel": "INFO"
+                }),
             )
         )
 
@@ -440,9 +455,13 @@ $$
         """
         return self.execute_query(execute_sql, _exec_async=is_async)
 
-    def run_async(self) -> str:
+    def run_async(self, params: list[str], log: bool, quiet: bool):
         """
         Run a Nextflow workflow asynchronously.
+
+        Args:
+            params: Parameters to pass to the workflow
+            log_level: Log level for the workflow execution (NONE, ERROR, INFO)
 
         Returns:
             Service name for monitoring the async execution
@@ -455,10 +474,21 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, True)
-        return cursor.sfqid
+        cursor = self._submit_nextflow_job(config, tarball_path, True, params, log, quiet)
+        cc.step(f"QueryId: {cursor.sfqid}")
+        cc.step(f"Job service Name: {self.service_name}")
 
-    def run(self) -> Optional[int]:
+    def run(self, params: list[str], log: bool, quiet: bool) -> Optional[int]:
+        """
+        Run a Nextflow workflow synchronously.
+
+        Args:
+            params: Parameters to pass to the workflow
+            log_level: Log level for the workflow execution (NONE, ERROR, INFO)
+
+        Returns:
+            Exit code if execution completed successfully, None otherwise
+        """
         cc.step("Parsing nextflow.config...")
         config = self._parse_config()
 
@@ -467,7 +497,7 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, False)
+        cursor = self._submit_nextflow_job(config, tarball_path, False, params, log, quiet)
         cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
 
         try:
