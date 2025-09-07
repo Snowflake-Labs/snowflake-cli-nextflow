@@ -330,7 +330,7 @@ class NextflowManager(SqlExecutionMixin):
         return exit_code
 
     def _submit_nextflow_job(
-        self, config: ProjectConfig, tarball_path: str, is_async: bool, params: list[str], log: bool, quiet: bool
+        self, config: ProjectConfig, tarball_path: str, is_async: bool, params: list[str], quiet: bool
     ) -> SnowflakeCursor:
         """
         Run the nextflow pipeline.
@@ -353,7 +353,10 @@ class NextflowManager(SqlExecutionMixin):
         nf_run_cmds = ["nextflow"]
         if quiet:
             nf_run_cmds.append("-q")
-        if log:
+
+        # If sync run, python pty server will read the .nextflow.log file in bg
+        # emit to stderr. If async run, emit .nextflow.log to stderr directly.
+        if is_async:
             nf_run_cmds.extend(["-log", "/dev/stderr"])
 
         nf_run_cmds.extend(
@@ -450,7 +453,7 @@ $$
         """
         return self.execute_query(execute_sql, _exec_async=is_async)
 
-    def run_async(self, params: list[str], log: bool, quiet: bool):
+    def run_async(self, params: list[str], quiet: bool):
         """
         Run a Nextflow workflow asynchronously.
 
@@ -469,11 +472,11 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, True, params, log, quiet)
+        cursor = self._submit_nextflow_job(config, tarball_path, True, params, quiet)
         cc.step(f"QueryId: {cursor.sfqid}")
         cc.step(f"Job service Name: {self.service_name}")
 
-    def run(self, params: list[str], log: bool, quiet: bool) -> Optional[int]:
+    def run(self, params: list[str], quiet: bool) -> Optional[int]:
         """
         Run a Nextflow workflow synchronously.
 
@@ -492,7 +495,7 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, False, params, log, quiet)
+        cursor = self._submit_nextflow_job(config, tarball_path, False, params, quiet)
         cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
 
         try:

@@ -37,7 +37,7 @@ profiles {
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
-        manager.run_async(["param1='value1'", "param2='value2'"], log=False, quiet=False)
+        manager.run_async(["param1='value1'", "param2='value2'"], quiet=False)
 
         executed_queries = mock_db.get_executed_queries()
         # Check that we have the expected number of queries
@@ -76,9 +76,10 @@ spec:
       cp -r /mnt/project/ /mnt/workdir/
 
 
-      nextflow run /mnt/workdir/project/ -name abc1234 -ansi-log False -profile test
-      -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace /tmp/trace.txt
-      -with-timeline /tmp/timeline.html --param1 ''value1'' --param2 ''value2''
+      nextflow -log /dev/stderr run /mnt/workdir/project/ -name abc1234 -ansi-log
+      False -profile test -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace
+      /tmp/trace.txt -with-timeline /tmp/timeline.html --param1 ''value1'' --param2
+      ''value2''
 
       cp /tmp/report.html /mnt/workdir/report.html
 
@@ -150,7 +151,7 @@ profiles {
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
-        manager.run_async([], log=False, quiet=False)
+        manager.run_async([], quiet=False)
 
 
 def test_version_validation_mismatched_versions(mock_db):
@@ -183,7 +184,7 @@ profiles {
                 id_generator=lambda: "abc1234",
                 temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
             )
-            manager.run_async([], log=False, quiet=False)
+            manager.run_async([], quiet=False)
 
 
 def test_version_validation_no_plugin_configured(mock_db):
@@ -213,7 +214,7 @@ profiles {
         )
 
         with pytest.raises(CliError, match="nf-snowflake plugin not found in nextflow.config"):
-            manager.run_async([], log=False, quiet=False)
+            manager.run_async([], quiet=False)
 
 
 def test_version_validation_plugin_without_version(mock_db):
@@ -247,7 +248,7 @@ profiles {
         )
 
         with pytest.raises(CliError, match="nf-snowflake plugin version not specified in nextflow.config"):
-            manager.run_async([], log=False, quiet=False)
+            manager.run_async([], quiet=False)
 
 
 def test_version_extraction_from_image():
@@ -310,46 +311,9 @@ profiles {
             id_generator=lambda: "abc1234",
             temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
         )
-        manager.run_async([], log=False, quiet=True)
+        manager.run_async([], quiet=True)
 
         executed_queries = mock_db.get_executed_queries()
         # Check that the nextflow command includes -q flag
         service_spec = executed_queries[2]
-        assert "nextflow -q run" in service_spec
-
-
-def test_nextflow_manager_with_log_flag(mock_db):
-    """Test nextflow manager with log flag enabled."""
-    config_content = """
-plugins {
-    id 'nf-snowflake@0.8.0'
-}
-
-profiles {
-    test {
-        snowflake {
-            computePool = 'test'
-            workDirStage = 'data_stage'
-            driverImage = 'ghcr.io/snowflake-labs/nf-snowflake:0.8.0'
-        }
-    }
-}
-"""
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write(config_content)
-
-        manager = NextflowManager(
-            project_dir=temp_dir,
-            profile="test",
-            id_generator=lambda: "abc1234",
-            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-        )
-        manager.run_async([], log=True, quiet=False)
-
-        executed_queries = mock_db.get_executed_queries()
-        # Check that the nextflow command includes -log flag
-        service_spec = executed_queries[2]
-        assert "nextflow -log /dev/stderr run" in service_spec
+        assert "nextflow -q -log /dev/stderr run" in service_spec
