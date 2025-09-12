@@ -25,13 +25,14 @@ class MockDB:
 
     def _execute_stream(self, query, remove_comments=False, cursor_class=SnowflakeCursor, **kwargs):
         # Record the executed query
-        self.executed_queries.append(query.getvalue())
+        query_string = query.getvalue()
+        self.executed_queries.append(query_string)
 
         # Create a new cursor for streaming
         stream_cursor = MagicMock()
 
         # You can make this smarter (e.g. fuzzy matching, regex, params)
-        result = self.query_results.get(query)
+        result = self.query_results.get(query_string)
         if isinstance(result, Exception):
             raise result
         if isinstance(result, list):

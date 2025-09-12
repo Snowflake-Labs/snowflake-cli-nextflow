@@ -1,9 +1,11 @@
 import typer
 from snowflake.cli.api.commands.snow_typer import SnowTyperFactory
-from snowflake.cli.api.output.types import CommandResult, MessageResult
+from snowflake.cli.api.output.types import CommandResult, MessageResult, QueryResult
 from snowflake.cli.api.exceptions import CliError
 from snowflakecli.nextflow.manager import NextflowManager
 from snowflakecli.nextflow.image.commands import app as image_app
+from snowflake.cli._plugins.sql.manager import SqlManager
+from snowflake.connector.cursor import DictCursor
 
 app = SnowTyperFactory(
     name="nextflow",
@@ -11,6 +13,42 @@ app = SnowTyperFactory(
 )
 
 app.add_typer(image_app)
+
+
+@app.command("history", requires_connection=True)
+def show_history(
+    limit: int = typer.Option(
+        5,
+        "--limit",
+        "-l",
+        help="Number of recent runs to display (default: 5)",
+    ),
+    **options,
+) -> CommandResult:
+    """
+    Show execution history for Nextflow workflows.
+    """
+    try:
+        # Use SqlManager to execute the query directly
+        sql_manager = SqlManager()
+
+        # Query the nxf_execution_history table for recent executions
+        # Ordered by startTimestamp in descending order (most recent first)
+        query = f"""
+        SELECT * exclude (run_id, submitted_by)
+        FROM nxf_execution_history
+        WHERE submitted_by = CURRENT_USER()
+        ORDER BY run_start_time DESC
+        LIMIT {limit}
+        """
+
+        cursor = sql_manager.execute_query(query, cursor_class=DictCursor)
+
+        # Return QueryResult which will handle the cursor results directly
+        return QueryResult(cursor)
+
+    except Exception as e:
+        raise CliError(f"Failed to retrieve execution history: {str(e)}")
 
 
 @app.command("run", requires_connection=True)
