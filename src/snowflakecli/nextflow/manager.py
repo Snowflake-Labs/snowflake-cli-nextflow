@@ -346,7 +346,7 @@ class NextflowManager(SqlExecutionMixin):
         )
 
         self.execute_query(f"alter session set query_tag = '{tags}'")
-        cursor = self.execute_query(f"select current_warehouse() as WH", cursor_class=DictCursor)
+        cursor = self.execute_query("select current_warehouse() as WH", cursor_class=DictCursor)
         warehouse = cursor.fetchone()["WH"]
 
         cursor = self.execute_query("select current_user() as USER", cursor_class=DictCursor)
