@@ -346,6 +346,11 @@ class NextflowManager(SqlExecutionMixin):
         )
 
         self.execute_query(f"alter session set query_tag = '{tags}'")
+        cursor = self.execute_query("select current_warehouse() as WH", cursor_class=DictCursor)
+        warehouse = cursor.fetchone()["WH"]
+
+        cursor = self.execute_query("select current_user() as USER", cursor_class=DictCursor)
+        user = cursor.fetchone()["USER"]
 
         workDir = "/mnt/workdir"
         tarball_filename = os.path.basename(tarball_path)
@@ -412,6 +417,10 @@ cp /tmp/timeline.html /mnt/workdir/timeline.html
 
         endpoints = None if is_async else [Endpoint(name="wss", port=8765, public=True)]
 
+        env = {"CURRENT_USER": user if user else "UNKNOWN"}
+        if warehouse:
+            env["SNOWFLAKE_WAREHOUSE"] = warehouse
+
         spec = Specification(
             spec=Spec(
                 containers=[
@@ -421,6 +430,7 @@ cp /tmp/timeline.html /mnt/workdir/timeline.html
                         command=["/bin/bash", "-e", "-c", run_script],
                         volumeMounts=config.volumeConfig.volumeMounts,
                         readinessProbe=ReadinessProbe(port=8765, path="/healthz") if not is_async else None,
+                        env=env,
                     )
                 ],
                 volumes=config.volumeConfig.volumes,

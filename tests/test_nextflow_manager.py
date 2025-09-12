@@ -41,7 +41,7 @@ profiles {
 
         executed_queries = mock_db.get_executed_queries()
         # Check that we have the expected number of queries
-        assert len(executed_queries) == 3
+        assert len(executed_queries) == 5
 
         # Check that the PUT command uses the deterministic file name
         put_query = executed_queries[0]
@@ -54,7 +54,7 @@ profiles {
         assert '"NEXTFLOW_RUN_ID": "abc1234"' in query_tag
 
         assert (
-            executed_queries[2]
+            executed_queries[4]
             == """
 EXECUTE JOB SERVICE
 IN COMPUTE POOL test
@@ -88,6 +88,9 @@ spec:
       cp /tmp/timeline.html /mnt/workdir/timeline.html
 
       echo ''nextflow command finished successfully'''
+    env:
+      CURRENT_USER: test_user
+      SNOWFLAKE_WAREHOUSE: test_warehouse
     image: ghcr.io/snowflake-labs/nf-snowflake:0.8.0
     name: nf-main
     volumeMounts:
@@ -315,5 +318,5 @@ profiles {
 
         executed_queries = mock_db.get_executed_queries()
         # Check that the nextflow command includes -q flag
-        service_spec = executed_queries[2]
+        service_spec = executed_queries[4]
         assert "nextflow -q -log /dev/stderr run" in service_spec

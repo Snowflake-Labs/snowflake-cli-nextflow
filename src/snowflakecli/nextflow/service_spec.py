@@ -22,6 +22,7 @@ class Container:
     command: list[str]
     volumeMounts: list[VolumeMount]
     readinessProbe: ReadinessProbe = None
+    env: dict = None
 
 
 @dataclass
