@@ -71,25 +71,27 @@ spec:
 
       mkdir -p /mnt/project && cd /mnt/project
 
-      tar -zxf /mnt/workdir/tmp1234.tar.gz 2>/dev/null
+      tar -zxf /mnt/workdir/abc1234//tmp1234.tar.gz 2>/dev/null
 
-      cp -r /mnt/project/ /mnt/workdir/
+      cp -r /mnt/project/ /mnt/workdir/abc1234//
 
 
-      nextflow -log /dev/stderr run /mnt/workdir/project/ -name abc1234 -ansi-log
+      nextflow -log /dev/stderr run /mnt/workdir/abc1234//project/ -name abc1234 -ansi-log
       False -profile test -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace
       /tmp/trace.txt -with-timeline /tmp/timeline.html --param1 ''value1'' --param2
       ''value2''
 
-      cp /tmp/report.html /mnt/workdir/report.html
+      cp /tmp/report.html /mnt/workdir/abc1234//report.html
 
-      cp /tmp/trace.txt /mnt/workdir/trace.txt
+      cp /tmp/trace.txt /mnt/workdir/abc1234//trace.txt
 
-      cp /tmp/timeline.html /mnt/workdir/timeline.html
+      cp /tmp/timeline.html /mnt/workdir/abc1234//timeline.html
 
       echo ''nextflow command finished successfully'''
     env:
       CURRENT_USER: test_user
+      NXF_IGNORE_RESUME_HISTORY: 'true'
+      SNOWFLAKE_CACHE_PATH: /mnt/workdir/cache
       SNOWFLAKE_WAREHOUSE: test_warehouse
     image: ghcr.io/snowflake-labs/nf-snowflake:0.8.0
     name: nf-main
@@ -118,7 +120,7 @@ spec:
     source: stage
     stageConfig:
       enableSymlink: true
-      name: '@data_stage/abc1234/'
+      name: '@data_stage/'
 
 $$
 """
