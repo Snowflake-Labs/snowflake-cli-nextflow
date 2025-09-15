@@ -330,7 +330,7 @@ class NextflowManager(SqlExecutionMixin):
         return exit_code
 
     def _submit_nextflow_job(
-        self, config: ProjectConfig, tarball_path: str, is_async: bool, params: list[str], quiet: bool
+        self, config: ProjectConfig, tarball_path: str, is_async: bool, params: list[str], quiet: bool, resume: str
     ) -> SnowflakeCursor:
         """
         Run the nextflow pipeline.
@@ -352,7 +352,7 @@ class NextflowManager(SqlExecutionMixin):
         cursor = self.execute_query("select current_user() as USER", cursor_class=DictCursor)
         user = cursor.fetchone()["USER"]
 
-        workDir = "/mnt/workdir"
+        workDir = f"/mnt/workdir/{self._run_id}/"
         tarball_filename = os.path.basename(tarball_path)
 
         nf_run_cmds = ["nextflow"]
@@ -374,8 +374,9 @@ class NextflowManager(SqlExecutionMixin):
                 str(not is_async),
                 "-profile",
                 self._profile,
+                # to support resume, we need to use the same work-dir across runs
                 "-work-dir",
-                workDir,
+                "/mnt/workdir",
                 "-with-report",
                 "/tmp/report.html",
                 "-with-trace",
@@ -384,6 +385,9 @@ class NextflowManager(SqlExecutionMixin):
                 "/tmp/timeline.html",
             ]
         )
+
+        if resume:
+            nf_run_cmds.extend(["-resume", resume])
 
         for param in params:
             param_key, param_value = param.split("=")
@@ -398,26 +402,31 @@ tar -zxf {workDir}/{tarball_filename} 2>/dev/null
 cp -r /mnt/project/ {workDir}/
 
 {python_pty_server_cmd}{" ".join(nf_run_cmds)}
-cp /tmp/report.html /mnt/workdir/report.html
-cp /tmp/trace.txt /mnt/workdir/trace.txt
-cp /tmp/timeline.html /mnt/workdir/timeline.html
+cp /tmp/report.html {workDir}/report.html
+cp /tmp/trace.txt {workDir}/trace.txt
+cp /tmp/timeline.html {workDir}/timeline.html
 """
         if is_async:
             run_script += "echo 'nextflow command finished successfully'"
 
-        config.volumeConfig.volumeMounts.append(VolumeMount(name="workdir", mountPath=workDir))
+        config.volumeConfig.volumeMounts.append(VolumeMount(name="workdir", mountPath="/mnt/workdir"))
 
         volume = Volume(
             name="workdir",
             source="stage",
-            stageConfig=StageConfig(name="@" + config.workDirStage + "/" + self._run_id + "/", enableSymlink=True),
+            stageConfig=StageConfig(name="@" + config.workDirStage + "/", enableSymlink=True),
         )
 
         config.volumeConfig.volumes.append(volume)
 
         endpoints = None if is_async else [Endpoint(name="wss", port=8765, public=True)]
 
-        env = {"CURRENT_USER": user if user else "UNKNOWN"}
+        env = {
+            "CURRENT_USER": user if user else "UNKNOWN",
+            # to support resume, we need to use the same cache path across runs
+            "SNOWFLAKE_CACHE_PATH": "/mnt/workdir/cache",
+            "NXF_IGNORE_RESUME_HISTORY": "true",
+        }
         if warehouse:
             env["SNOWFLAKE_WAREHOUSE"] = warehouse
 
@@ -463,7 +472,7 @@ $$
         """
         return self.execute_query(execute_sql, _exec_async=is_async)
 
-    def run_async(self, params: list[str], quiet: bool):
+    def run_async(self, params: list[str], quiet: bool, resume: str = None):
         """
         Run a Nextflow workflow asynchronously.
 
@@ -482,11 +491,11 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, True, params, quiet)
+        cursor = self._submit_nextflow_job(config, tarball_path, True, params, quiet, resume)
         cc.step(f"QueryId: {cursor.sfqid}")
         cc.step(f"Job service Name: {self.service_name}")
 
-    def run(self, params: list[str], quiet: bool) -> Optional[int]:
+    def run(self, params: list[str], quiet: bool, resume: str = None) -> Optional[int]:
         """
         Run a Nextflow workflow synchronously.
 
@@ -505,7 +514,7 @@ $$
             tarball_path = self._upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
-        cursor = self._submit_nextflow_job(config, tarball_path, False, params, quiet)
+        cursor = self._submit_nextflow_job(config, tarball_path, False, params, quiet, resume)
         cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
 
         try:

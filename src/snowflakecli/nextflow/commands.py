@@ -15,7 +15,7 @@ app = SnowTyperFactory(
 app.add_typer(image_app)
 
 
-@app.command("history", requires_connection=True)
+@app.command("log", requires_connection=True)
 def show_history(
     limit: int = typer.Option(
         5,
@@ -59,6 +59,11 @@ def run_workflow(
         "--profile",
         help="Nextflow profile to use for the workflow execution",
     ),
+    resume: str = typer.Option(
+        None,
+        "--resume",
+        help="Resume a workflow from a specific session ID",
+    ),
     async_run: bool = typer.Option(
         False,
         "--async",
@@ -83,11 +88,11 @@ def run_workflow(
     manager = NextflowManager(project_dir, profile)
 
     if async_run is not None and async_run:
-        result = manager.run_async(params, quiet)
+        result = manager.run_async(params, quiet, resume)
         # For async runs, result should contain service information
         return MessageResult("Nextflow workflow submitted successfully. Check Snowsight for status.")
     else:
-        result = manager.run(params, quiet)
+        result = manager.run(params, quiet, resume)
         # For sync runs, result should be exit code
         if result is not None:
             if result == 0:
