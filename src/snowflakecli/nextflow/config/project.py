@@ -1,6 +1,7 @@
 from snowflakecli.nextflow.service_spec import VolumeConfig
 from snowflake.cli.api.exceptions import CliError
 
+
 class ProjectConfig:
     """Configuration for a Nextflow project."""
 
@@ -10,13 +11,17 @@ class ProjectConfig:
         workDirStage: str = None,
         volumeConfig: VolumeConfig = None,
         driverImage: str = None,
+        craneImage: str = None,
         eai: str = None,
+        registryMappings: str = None,
     ):
         self.computePool = computePool
         self.workDirStage = workDirStage
         self.volumeConfig = volumeConfig
         self.driverImage = driverImage
+        self.craneImage = craneImage
         self.eai = eai
+        self.registryMappings = registryMappings
 
         self._validate_required_fields()
 
@@ -38,4 +43,3 @@ class ProjectConfig:
             field_value = getattr(self, field_name, None)
             if field_value is None:
                 raise CliError(f"{config_key} is required but not found in nextflow.config")
-

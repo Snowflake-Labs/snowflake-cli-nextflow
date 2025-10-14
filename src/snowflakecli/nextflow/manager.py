@@ -16,7 +16,6 @@ from snowflakecli.nextflow.service_spec import (
 from snowflake.cli.api.exceptions import CliError
 from snowflake.cli.api.console import cli_console as cc
 import os
-import tarfile
 import tempfile
 from pathlib import Path
 import random
@@ -36,6 +35,8 @@ from snowflakecli.nextflow.wss import (
 from typing import Optional, Callable
 from snowflakecli.nextflow.config.parser import NextflowConfigParser
 from snowflakecli.nextflow.config.project import ProjectConfig
+from snowflakecli.nextflow.uploader import ProjectUploader
+
 
 class NextflowManager(SqlExecutionMixin):
     def __init__(
@@ -59,6 +60,14 @@ class NextflowManager(SqlExecutionMixin):
         # Use injected ID generator or default one
         self._run_id = id_generator() if id_generator else self._generate_run_id()
         self.service_name = f"NXF_MAIN_{self._run_id}"
+
+        # Initialize project uploader
+        self._project_uploader = ProjectUploader(
+            project_dir=self._project_dir,
+            run_id=self._run_id,
+            temp_file_generator=self._temp_file_generator,
+            sql_executor=self,
+        )
 
     def _default_temp_file_generator(self, suffix: str) -> str:
         """
@@ -94,8 +103,10 @@ class NextflowManager(SqlExecutionMixin):
             computePool=selected.get("computePool", None),
             workDirStage=selected.get("workDirStage", None),
             driverImage=selected.get("driverImage", None),
+            craneImage=None,
             eai=selected.get("externalAccessIntegrations", ""),
             volumeConfig=parse_stage_mounts(selected.get("stageMounts", None)),
+            registryMappings=selected.get("registryMappings", None),
         )
 
         self._validate_plugin_versions(selected.get("plugins", []), config.driverImage)
@@ -170,65 +181,6 @@ class NextflowManager(SqlExecutionMixin):
             return match.group(1)
 
         return None
-
-    def _upload_project(self, config: ProjectConfig) -> str:
-        """
-        Create a tarball of the project directory and upload to Snowflake stage.
-        """
-
-        # Create temporary file for the tarball using injected generator
-        temp_tarball_path = self._temp_file_generator(".tar.gz")
-
-        try:
-            cc.step("Creating tarball...")
-            # Create tarball excluding .git directory
-            self._create_tarball(self._project_dir, temp_tarball_path)
-
-            cc.step(f"Uploading to stage {config.workDirStage}...")
-            # Upload to Snowflake stage
-            self.execute_query(f"PUT file://{temp_tarball_path} @{config.workDirStage}/{self._run_id}")
-
-            return temp_tarball_path
-
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_tarball_path):
-                os.unlink(temp_tarball_path)
-
-    def _create_tarball(self, project_path: Path, tarball_path: str):
-        """
-        Create a tarball of the project directory, excluding .git and other unwanted files.
-
-        Args:
-            project_path: Path to the project directory
-            tarball_path: Path where the tarball should be created
-        """
-
-        def tar_filter(tarinfo):
-            """Filter function to exclude unwanted files/directories"""
-            # Exclude other common unwanted files/directories
-            excluded_patterns = [
-                ".git",
-                ".gitignore",
-            ]
-
-            for pattern in excluded_patterns:
-                if pattern in tarinfo.name:
-                    return None
-
-            return tarinfo
-
-        try:
-            with tarfile.open(tarball_path, "w:gz") as tar:
-                # Add all files from project directory with filtering
-                tar.add(
-                    project_path,
-                    arcname=project_path.name,  # Use project name as root in archive
-                    filter=tar_filter,
-                )
-
-        except Exception as e:
-            raise CliError(f"Failed to create tarball: {str(e)}")
 
     def _stream_service_logs(self, service_name: str) -> Optional[int]:
         """
@@ -448,7 +400,7 @@ $$
 
         tarball_path = None
         with cc.phase("Uploading project to Snowflake..."):
-            tarball_path = self._upload_project(config)
+            tarball_path = self._project_uploader.upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
         cursor = self._submit_nextflow_job(config, tarball_path, True, params, quiet, resume)
@@ -471,7 +423,7 @@ $$
 
         tarball_path = None
         with cc.phase("Uploading project to Snowflake..."):
-            tarball_path = self._upload_project(config)
+            tarball_path = self._project_uploader.upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
         cursor = self._submit_nextflow_job(config, tarball_path, False, params, quiet, resume)
@@ -486,73 +438,3 @@ $$
             return exit_code
         finally:
             self.execute_query("drop service if exists " + self.service_name)
-
-    def _run_nextflow_inspect(self, config: ProjectConfig, tarball_path: str) -> None:
-        """
-        Run the nextflow inspect command.
-        """
-        workDir = "/mnt/workdir"
-        tarball_filename = os.path.basename(tarball_path)
-
-        nf_inspect_cmds = [
-            "nextflow",
-            "inspect",
-            "."
-        ]
-
-        run_script = f"""
-mkdir -p /mnt/project && cd /mnt/project
-tar -zxf {workDir}/{tarball_filename} 2>/dev/null
-
-{" ".join(nf_inspect_cmds)}
-"""
-
-        volumeMount = VolumeMount(name="workdir", mountPath=workDir)
-        volume = Volume(
-            name="workdir",
-            source="stage",
-            stageConfig=StageConfig(name="@" + config.workDirStage + "/" + self._run_id + "/", enableSymlink=True),
-        )
-
-        config.volumeConfig.volumes.append(volume)
-        spec = Specification(
-            spec=Spec(
-                containers=[
-                    Container(
-                        name="nf-inspect",
-                        image=config.driverImage,
-                        command=["/bin/bash", "-c", run_script],
-                        volumeMounts=[volumeMount],
-                    )
-                ],
-                volumes=[volume],
-                endpoints=None,
-            ),
-        )
-
-        yaml_spec = spec.to_yaml()
-        self.execute_query(f"""
-EXECUTE JOB SERVICE
-IN COMPUTE POOL {config.computePool}
-NAME = {self.service_name}
-EXTERNAL_ACCESS_INTEGRATIONS = ({config.eai})
-FROM SPECIFICATION $$
-{yaml_spec}
-$$
-"""
-        )
-
-        cursor = self.execute_query(f"select system$get_service_logs('{self.service_name}', 0, 'nf-inspect')")
-        return cursor.fetchone()[0]
-
-    def replicate_image(self):
-        cc.step("Parsing nextflow.config...")
-        config = self._parse_config()
-
-        tarball_path = None
-        with cc.phase("Uploading project to Snowflake..."):
-            tarball_path = self._upload_project(config)
-
-        cc.step("Submitting nextflow job to Snowflake...")
-        data = self._run_nextflow_inspect(config, tarball_path)
-        print(data)
