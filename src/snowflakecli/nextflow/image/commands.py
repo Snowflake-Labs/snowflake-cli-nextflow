@@ -4,6 +4,7 @@ from snowflake.cli.api.output.types import CommandResult, MessageResult
 from snowflake.cli.api.exceptions import CliError
 from snowflakecli.nextflow.image.manager import ImageManager
 from snowflake.cli.api.config import set_config_value, PLUGINS_SECTION_PATH
+from snowflakecli.nextflow.image.replicator import ImageReplicator
 
 app = SnowTyperFactory(
     name="image",
@@ -59,3 +60,23 @@ def push_image(
         )
 
     return MessageResult("Successfully pushed image to Snowflake registry")
+
+
+@app.command("replicate", requires_connection=True)
+def replicate_image(
+    project_dir: str = typer.Argument(help="Name of the workflow to run"),
+    profile: str = typer.Option(
+        None,
+        "--profile",
+        help="Nextflow profile to use for the workflow execution",
+    ),
+    **options,
+) -> CommandResult:
+    """
+    Replicate the image from the project directory.
+    """
+
+    manager = ImageReplicator(project_dir, profile)
+    manager.replicate_image()
+
+    return MessageResult("Successfully replicated image from project directory")

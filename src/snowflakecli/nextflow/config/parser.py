@@ -32,6 +32,31 @@ class NextflowConfigParser:
         with open(config_path, "r") as f:
             config_text = f.read()
 
+        return self.parse_str(config_text, profile)
+
+    def parse_str(self, config_text: str, profile: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Parse nextflow configuration from a string and extract snowflake configuration and plugins.
+
+        Args:
+                config_text: String containing nextflow configuration content
+                profile: Optional profile name(s) to extract config from (comma-separated for multiple)
+
+        Returns:
+                Dictionary containing snowflake configuration values and plugins information
+        """
+        # Handle None or non-string input
+        if config_text is None:
+            return {}
+
+        # Ensure config_text is a string
+        if not isinstance(config_text, str):
+            config_text = str(config_text)
+
+        # Handle empty config text
+        if not config_text.strip():
+            return {}
+
         try:
             tree = parse_groovy_content(config_text)
             t_tree = digest_lark_tree(tree)

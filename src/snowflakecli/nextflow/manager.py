@@ -4,8 +4,6 @@ from snowflakecli.nextflow.service_spec import (
     Specification,
     Spec,
     Container,
-    parse_stage_mounts,
-    VolumeConfig,
     VolumeMount,
     Volume,
     Endpoint,
@@ -17,9 +15,7 @@ from snowflakecli.nextflow.service_spec import (
 from snowflake.cli.api.exceptions import CliError
 from snowflake.cli.api.console import cli_console as cc
 import os
-import tarfile
 import tempfile
-from pathlib import Path
 import random
 import string
 from datetime import datetime
@@ -35,62 +31,21 @@ from snowflakecli.nextflow.wss import (
     WebSocketServerError,
 )
 from typing import Optional, Callable
-from snowflakecli.nextflow.config.parser import NextflowConfigParser
-
-
-class ProjectConfig:
-    """Configuration for a Nextflow project."""
-
-    def __init__(
-        self,
-        computePool: str = None,
-        workDirStage: str = None,
-        volumeConfig: VolumeConfig = None,
-        driverImage: str = None,
-        eai: str = None,
-    ):
-        self.computePool = computePool
-        self.workDirStage = workDirStage
-        self.volumeConfig = volumeConfig
-        self.driverImage = driverImage
-        self.eai = eai
-
-        self._validate_required_fields()
-
-    def _validate_required_fields(self) -> None:
-        """
-        Validate that all required configuration fields are present.
-
-        Raises:
-            CliError: If any required field is missing (None)
-        """
-        # Define required fields - add new required fields here in the future
-        required_fields = [
-            ("computePool", "computePool"),
-            ("workDirStage", "workDirStage"),
-            ("driverImage", "driverImage"),
-        ]
-
-        for field_name, config_key in required_fields:
-            field_value = getattr(self, field_name, None)
-            if field_value is None:
-                raise CliError(f"{config_key} is required but not found in nextflow.config")
+from snowflakecli.nextflow.config.project import ProjectConfig, Project, FilesystemProject
+from snowflakecli.nextflow.uploader import ProjectUploader
 
 
 class NextflowManager(SqlExecutionMixin):
     def __init__(
         self,
-        project_dir: str,
+        project: Project,
         profile: str = None,
         id_generator: Callable[[], str] = None,
         temp_file_generator: Callable[[str], str] = None,
     ):
         super().__init__()
-        self._project_dir = Path(project_dir)
-
-        if not self._project_dir.exists() or not self._project_dir.is_dir():
-            raise CliError(f"Invalid project directory '{project_dir}'")
-
+        self._project = project
+        self._project_dir = project.get_project_dir()
         self._profile = profile
 
         # Use injected temp file generator or default one
@@ -99,6 +54,37 @@ class NextflowManager(SqlExecutionMixin):
         # Use injected ID generator or default one
         self._run_id = id_generator() if id_generator else self._generate_run_id()
         self.service_name = f"NXF_MAIN_{self._run_id}"
+
+        # Initialize project uploader
+        self._project_uploader = ProjectUploader(
+            project_dir=self._project_dir,
+            run_id=self._run_id,
+            temp_file_generator=self._temp_file_generator,
+            sql_executor=self,
+        )
+
+    @classmethod
+    def from_project_dir(
+        cls,
+        project_dir: str,
+        profile: str = None,
+        id_generator: Callable[[], str] = None,
+        temp_file_generator: Callable[[str], str] = None,
+    ):
+        """
+        Create a NextflowManager from a project directory.
+
+        Args:
+            project_dir: Path to the project directory containing nextflow.config
+            profile: Optional profile name(s) to extract config from
+            id_generator: Optional function to generate run ID
+            temp_file_generator: Optional function to generate temp files
+
+        Returns:
+            NextflowManager instance
+        """
+        project = FilesystemProject(project_dir)
+        return cls(project, profile, id_generator, temp_file_generator)
 
     def _default_temp_file_generator(self, suffix: str) -> str:
         """
@@ -124,22 +110,11 @@ class NextflowManager(SqlExecutionMixin):
 
     def _parse_config(self) -> ProjectConfig:
         """
-        Parse the nextflow.config file and return a ProjectConfig object.
+        Parse the nextflow.config and return a ProjectConfig object.
         Also validates plugin versions against nf_snowflake_image version.
         """
-        parser = NextflowConfigParser()
-        selected = parser.parse(self._project_dir, self._profile)
-
-        config = ProjectConfig(
-            computePool=selected.get("computePool", None),
-            workDirStage=selected.get("workDirStage", None),
-            driverImage=selected.get("driverImage", None),
-            eai=selected.get("externalAccessIntegrations", ""),
-            volumeConfig=parse_stage_mounts(selected.get("stageMounts", None)),
-        )
-
-        self._validate_plugin_versions(selected.get("plugins", []), config.driverImage)
-
+        config, plugins = self._project.get_project_config(self._profile)
+        self._validate_plugin_versions(plugins, config.driverImage)
         return config
 
     def _validate_plugin_versions(self, plugins: list[dict], driver_image: str) -> None:
@@ -210,65 +185,6 @@ class NextflowManager(SqlExecutionMixin):
             return match.group(1)
 
         return None
-
-    def _upload_project(self, config: ProjectConfig) -> str:
-        """
-        Create a tarball of the project directory and upload to Snowflake stage.
-        """
-
-        # Create temporary file for the tarball using injected generator
-        temp_tarball_path = self._temp_file_generator(".tar.gz")
-
-        try:
-            cc.step("Creating tarball...")
-            # Create tarball excluding .git directory
-            self._create_tarball(self._project_dir, temp_tarball_path)
-
-            cc.step(f"Uploading to stage {config.workDirStage}...")
-            # Upload to Snowflake stage
-            self.execute_query(f"PUT file://{temp_tarball_path} @{config.workDirStage}/{self._run_id}")
-
-            return temp_tarball_path
-
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_tarball_path):
-                os.unlink(temp_tarball_path)
-
-    def _create_tarball(self, project_path: Path, tarball_path: str):
-        """
-        Create a tarball of the project directory, excluding .git and other unwanted files.
-
-        Args:
-            project_path: Path to the project directory
-            tarball_path: Path where the tarball should be created
-        """
-
-        def tar_filter(tarinfo):
-            """Filter function to exclude unwanted files/directories"""
-            # Exclude other common unwanted files/directories
-            excluded_patterns = [
-                ".git",
-                ".gitignore",
-            ]
-
-            for pattern in excluded_patterns:
-                if pattern in tarinfo.name:
-                    return None
-
-            return tarinfo
-
-        try:
-            with tarfile.open(tarball_path, "w:gz") as tar:
-                # Add all files from project directory with filtering
-                tar.add(
-                    project_path,
-                    arcname=project_path.name,  # Use project name as root in archive
-                    filter=tar_filter,
-                )
-
-        except Exception as e:
-            raise CliError(f"Failed to create tarball: {str(e)}")
 
     def _stream_service_logs(self, service_name: str) -> Optional[int]:
         """
@@ -488,7 +404,7 @@ $$
 
         tarball_path = None
         with cc.phase("Uploading project to Snowflake..."):
-            tarball_path = self._upload_project(config)
+            tarball_path = self._project_uploader.upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
         cursor = self._submit_nextflow_job(config, tarball_path, True, params, quiet, resume)
@@ -511,7 +427,7 @@ $$
 
         tarball_path = None
         with cc.phase("Uploading project to Snowflake..."):
-            tarball_path = self._upload_project(config)
+            tarball_path = self._project_uploader.upload_project(config)
 
         cc.step("Submitting nextflow job to Snowflake...")
         cursor = self._submit_nextflow_job(config, tarball_path, False, params, quiet, resume)
