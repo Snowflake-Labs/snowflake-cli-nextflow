@@ -33,7 +33,7 @@ snowflake.workDirStage = 'test_stage'
 snowflake.stageMounts = 'input:/data/input,output:/data/output'
 snowflake.enableStageMountV2 = true
 """
-        result = self.parser.parse_str(str(config_text))
+        result = self.parser.parse_str(config_text)
 
         assert result["computePool"] == "test_pool"
         assert result["workDirStage"] == "test_stage"
