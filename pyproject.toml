@@ -42,7 +42,7 @@ dependencies = [
     "pyyaml",
     "websockets",
     "docker",
-    "groovy-parser",
+    "groovy-parser>=0.2.0",
 ]
 
 [project.urls]

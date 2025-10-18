@@ -45,6 +45,18 @@ class NextflowConfigParser:
         Returns:
                 Dictionary containing snowflake configuration values and plugins information
         """
+        # Handle None or non-string input
+        if config_text is None:
+            return {}
+
+        # Ensure config_text is a string
+        if not isinstance(config_text, str):
+            config_text = str(config_text)
+
+        # Handle empty config text
+        if not config_text.strip():
+            return {}
+
         try:
             tree = parse_groovy_content(config_text)
             t_tree = digest_lark_tree(tree)
