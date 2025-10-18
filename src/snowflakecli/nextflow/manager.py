@@ -4,7 +4,6 @@ from snowflakecli.nextflow.service_spec import (
     Specification,
     Spec,
     Container,
-    parse_stage_mounts,
     VolumeMount,
     Volume,
     Endpoint,
@@ -17,7 +16,6 @@ from snowflake.cli.api.exceptions import CliError
 from snowflake.cli.api.console import cli_console as cc
 import os
 import tempfile
-from pathlib import Path
 import random
 import string
 from datetime import datetime
@@ -33,25 +31,21 @@ from snowflakecli.nextflow.wss import (
     WebSocketServerError,
 )
 from typing import Optional, Callable
-from snowflakecli.nextflow.config.parser import NextflowConfigParser
-from snowflakecli.nextflow.config.project import ProjectConfig
+from snowflakecli.nextflow.config.project import ProjectConfig, Project, FilesystemProject
 from snowflakecli.nextflow.uploader import ProjectUploader
 
 
 class NextflowManager(SqlExecutionMixin):
     def __init__(
         self,
-        project_dir: str,
+        project: Project,
         profile: str = None,
         id_generator: Callable[[], str] = None,
         temp_file_generator: Callable[[str], str] = None,
     ):
         super().__init__()
-        self._project_dir = Path(project_dir)
-
-        if not self._project_dir.exists() or not self._project_dir.is_dir():
-            raise CliError(f"Invalid project directory '{project_dir}'")
-
+        self._project = project
+        self._project_dir = project.get_project_dir()
         self._profile = profile
 
         # Use injected temp file generator or default one
@@ -68,6 +62,29 @@ class NextflowManager(SqlExecutionMixin):
             temp_file_generator=self._temp_file_generator,
             sql_executor=self,
         )
+
+    @classmethod
+    def from_project_dir(
+        cls,
+        project_dir: str,
+        profile: str = None,
+        id_generator: Callable[[], str] = None,
+        temp_file_generator: Callable[[str], str] = None,
+    ):
+        """
+        Create a NextflowManager from a project directory.
+
+        Args:
+            project_dir: Path to the project directory containing nextflow.config
+            profile: Optional profile name(s) to extract config from
+            id_generator: Optional function to generate run ID
+            temp_file_generator: Optional function to generate temp files
+
+        Returns:
+            NextflowManager instance
+        """
+        project = FilesystemProject(project_dir)
+        return cls(project, profile, id_generator, temp_file_generator)
 
     def _default_temp_file_generator(self, suffix: str) -> str:
         """
@@ -93,24 +110,11 @@ class NextflowManager(SqlExecutionMixin):
 
     def _parse_config(self) -> ProjectConfig:
         """
-        Parse the nextflow.config file and return a ProjectConfig object.
+        Parse the nextflow.config and return a ProjectConfig object.
         Also validates plugin versions against nf_snowflake_image version.
         """
-        parser = NextflowConfigParser()
-        selected = parser.parse(self._project_dir, self._profile)
-
-        config = ProjectConfig(
-            computePool=selected.get("computePool", None),
-            workDirStage=selected.get("workDirStage", None),
-            driverImage=selected.get("driverImage", None),
-            craneImage=None,
-            eai=selected.get("externalAccessIntegrations", ""),
-            volumeConfig=parse_stage_mounts(selected.get("stageMounts", None)),
-            registryMappings=selected.get("registryMappings", None),
-        )
-
-        self._validate_plugin_versions(selected.get("plugins", []), config.driverImage)
-
+        config, plugins = self._project.get_project_config(self._profile)
+        self._validate_plugin_versions(plugins, config.driverImage)
         return config
 
     def _validate_plugin_versions(self, plugins: list[dict], driver_image: str) -> None:

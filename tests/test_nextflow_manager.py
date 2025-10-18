@@ -1,6 +1,5 @@
-import tempfile
-import os
 from snowflakecli.nextflow.manager import NextflowManager
+from snowflakecli.nextflow.config.project import InMemoryProject
 from snowflake.cli.api.exceptions import CliError
 import pytest
 
@@ -25,37 +24,32 @@ profiles {
 }
 """
 
-    # Create temporary directory with nextflow.config file
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write(config_content)
+    project = InMemoryProject(config_content)
+    manager = NextflowManager(
+        project=project,
+        profile="test",
+        id_generator=lambda: "abc1234",
+        temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
+    )
+    manager.run_async(["param1='value1'", "param2='value2'"], quiet=False)
 
-        manager = NextflowManager(
-            project_dir=temp_dir,
-            profile="test",
-            id_generator=lambda: "abc1234",
-            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-        )
-        manager.run_async(["param1='value1'", "param2='value2'"], quiet=False)
+    executed_queries = mock_db.get_executed_queries()
+    # Check that we have the expected number of queries
+    assert len(executed_queries) == 5
 
-        executed_queries = mock_db.get_executed_queries()
-        # Check that we have the expected number of queries
-        assert len(executed_queries) == 5
+    # Check that the PUT command uses the deterministic file name
+    put_query = executed_queries[0]
+    assert put_query.startswith("PUT file:///tmp/tmp1234.tar.gz @data_stage/abc1234")
 
-        # Check that the PUT command uses the deterministic file name
-        put_query = executed_queries[0]
-        assert put_query.startswith("PUT file:///tmp/tmp1234.tar.gz @data_stage/abc1234")
+    # Check that the query tag is set correctly
+    query_tag = executed_queries[1]
+    assert "alter session set query_tag" in query_tag
+    assert '"NEXTFLOW_JOB_TYPE": "main"' in query_tag
+    assert '"NEXTFLOW_RUN_ID": "abc1234"' in query_tag
 
-        # Check that the query tag is set correctly
-        query_tag = executed_queries[1]
-        assert "alter session set query_tag" in query_tag
-        assert '"NEXTFLOW_JOB_TYPE": "main"' in query_tag
-        assert '"NEXTFLOW_RUN_ID": "abc1234"' in query_tag
-
-        assert (
-            executed_queries[4]
-            == """
+    assert (
+        executed_queries[4]
+        == """
 EXECUTE JOB SERVICE
 IN COMPUTE POOL test
 NAME = NXF_MAIN_abc1234
@@ -124,7 +118,7 @@ spec:
 
 $$
 """
-        )
+    )
 
 
 def test_version_validation_matching_versions(mock_db):
@@ -144,19 +138,15 @@ profiles {
     }
 }
 """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write(config_content)
-
-        # This should not raise an exception
-        manager = NextflowManager(
-            project_dir=temp_dir,
-            profile="test",
-            id_generator=lambda: "abc1234",
-            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-        )
-        manager.run_async([], quiet=False)
+    project = InMemoryProject(config_content)
+    # This should not raise an exception
+    manager = NextflowManager(
+        project=project,
+        profile="test",
+        id_generator=lambda: "abc1234",
+        temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
+    )
+    manager.run_async([], quiet=False)
 
 
 def test_version_validation_mismatched_versions(mock_db):
@@ -176,20 +166,16 @@ profiles {
     }
 }
 """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write(config_content)
-
-        # This should raise a CliError due to version mismatch
-        with pytest.raises(CliError, match="Version mismatch detected"):
-            manager = NextflowManager(
-                project_dir=temp_dir,
-                profile="test",
-                id_generator=lambda: "abc1234",
-                temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-            )
-            manager.run_async([], quiet=False)
+    project = InMemoryProject(config_content)
+    # This should raise a CliError due to version mismatch
+    with pytest.raises(CliError, match="Version mismatch detected"):
+        manager = NextflowManager(
+            project=project,
+            profile="test",
+            id_generator=lambda: "abc1234",
+            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
+        )
+        manager.run_async([], quiet=False)
 
 
 def test_version_validation_no_plugin_configured(mock_db):
@@ -205,21 +191,17 @@ profiles {
     }
 }
 """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write(config_content)
+    project = InMemoryProject(config_content)
+    # This should not raise an exception (no plugin to validate)
+    manager = NextflowManager(
+        project=project,
+        profile="test",
+        id_generator=lambda: "abc1234",
+        temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
+    )
 
-        # This should not raise an exception (no plugin to validate)
-        manager = NextflowManager(
-            project_dir=temp_dir,
-            profile="test",
-            id_generator=lambda: "abc1234",
-            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-        )
-
-        with pytest.raises(CliError, match="nf-snowflake plugin not found in nextflow.config"):
-            manager.run_async([], quiet=False)
+    with pytest.raises(CliError, match="nf-snowflake plugin not found in nextflow.config"):
+        manager.run_async([], quiet=False)
 
 
 def test_version_validation_plugin_without_version(mock_db):
@@ -239,30 +221,23 @@ profiles {
     }
 }
 """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write(config_content)
+    project = InMemoryProject(config_content)
+    # This should not raise an exception (no version to validate)
+    manager = NextflowManager(
+        project=project,
+        profile="test",
+        id_generator=lambda: "abc1234",
+        temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
+    )
 
-        # This should not raise an exception (no version to validate)
-        manager = NextflowManager(
-            project_dir=temp_dir,
-            profile="test",
-            id_generator=lambda: "abc1234",
-            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-        )
-
-        with pytest.raises(CliError, match="nf-snowflake plugin version not specified in nextflow.config"):
-            manager.run_async([], quiet=False)
+    with pytest.raises(CliError, match="nf-snowflake plugin version not specified in nextflow.config"):
+        manager.run_async([], quiet=False)
 
 
 def test_version_extraction_from_image():
     """Test version extraction from various image name formats."""
-    # Create a temporary manager just to test the version extraction method
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write("""
+    # Create config provider with a simple config
+    config_content = """
 profiles {
     test {
         snowflake {
@@ -270,21 +245,21 @@ profiles {
         }
     }
 }
-""")
+"""
+    project = InMemoryProject(config_content)
+    manager = NextflowManager(project=project, profile="test")
 
-        manager = NextflowManager(project_dir=temp_dir, profile="test")
+    # Test various image name patterns
+    assert manager._extract_version_from_image("nf-snowflake:0.8.0") == "0.8.0"
+    assert manager._extract_version_from_image("ghcr.io/snowflake-labs/nf-snowflake:0.7.1") == "0.7.1"
+    assert manager._extract_version_from_image("repo/nf-snowflake:1.2.3") == "1.2.3"
+    assert manager._extract_version_from_image("nf-snowflake:0.8.0-beta") == "0.8.0-beta"
+    assert manager._extract_version_from_image("nf-snowflake:latest") == "latest"
 
-        # Test various image name patterns
-        assert manager._extract_version_from_image("nf-snowflake:0.8.0") == "0.8.0"
-        assert manager._extract_version_from_image("ghcr.io/snowflake-labs/nf-snowflake:0.7.1") == "0.7.1"
-        assert manager._extract_version_from_image("repo/nf-snowflake:1.2.3") == "1.2.3"
-        assert manager._extract_version_from_image("nf-snowflake:0.8.0-beta") == "0.8.0-beta"
-        assert manager._extract_version_from_image("nf-snowflake:latest") == "latest"
-
-        # Test edge cases
-        assert manager._extract_version_from_image("nf-snowflake") is None
-        assert manager._extract_version_from_image("") is None
-        assert manager._extract_version_from_image(None) is None
+    # Test edge cases
+    assert manager._extract_version_from_image("nf-snowflake") is None
+    assert manager._extract_version_from_image("") is None
+    assert manager._extract_version_from_image(None) is None
 
 
 def test_nextflow_manager_with_quiet_flag(mock_db):
@@ -305,20 +280,16 @@ profiles {
 }
 """
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = os.path.join(temp_dir, "nextflow.config")
-        with open(config_path, "w") as f:
-            f.write(config_content)
+    project = InMemoryProject(config_content)
+    manager = NextflowManager(
+        project=project,
+        profile="test",
+        id_generator=lambda: "abc1234",
+        temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
+    )
+    manager.run_async([], quiet=True)
 
-        manager = NextflowManager(
-            project_dir=temp_dir,
-            profile="test",
-            id_generator=lambda: "abc1234",
-            temp_file_generator=lambda suffix: f"/tmp/tmp1234{suffix}",
-        )
-        manager.run_async([], quiet=True)
-
-        executed_queries = mock_db.get_executed_queries()
-        # Check that the nextflow command includes -q flag
-        service_spec = executed_queries[4]
-        assert "nextflow -q -log /dev/stderr run" in service_spec
+    executed_queries = mock_db.get_executed_queries()
+    # Check that the nextflow command includes -q flag
+    service_spec = executed_queries[4]
+    assert "nextflow -q -log /dev/stderr run" in service_spec

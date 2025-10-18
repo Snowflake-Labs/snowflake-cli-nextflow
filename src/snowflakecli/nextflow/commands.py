@@ -85,7 +85,7 @@ def run_workflow(
     Run a Nextflow workflow in Snowpark Container Service.
     """
 
-    manager = NextflowManager(project_dir, profile)
+    manager = NextflowManager.from_project_dir(project_dir, profile)
 
     if async_run is not None and async_run:
         result = manager.run_async(params, quiet, resume)
