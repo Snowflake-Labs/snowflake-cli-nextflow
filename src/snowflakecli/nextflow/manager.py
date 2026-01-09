@@ -365,28 +365,23 @@ cp /tmp/timeline.html {workDir}/timeline.html
         )
 
         # Get YAML string for inline spec
+        # Note: When is_async is True, the client will execute job as async, so the job
+        # definition in the server side inside spec will ASYNC = False
+        # When is_async is False, the client will execute job as sync, so the job
+        # definition in the server side inside spec will ASYNC = True
+        # and client will then wait job to start, and then connect to the WebSocket endpoint to stream logs
         yaml_spec = spec.to_yaml()
-
-        if is_async:
-            execute_sql = f"""
+        execute_sql = f"""
 EXECUTE JOB SERVICE
 IN COMPUTE POOL {config.computePool}
 NAME = {self.service_name}
+ASYNC = True
 EXTERNAL_ACCESS_INTEGRATIONS = ({config.eai})
 FROM SPECIFICATION $$
 {yaml_spec}
 $$
             """
-        else:
-            execute_sql = f"""
-CREATE SERVICE {self.service_name}
-IN COMPUTE POOL {config.computePool}
-EXTERNAL_ACCESS_INTEGRATIONS = ({config.eai})
-FROM SPECIFICATION $$
-{yaml_spec}
-$$
-        """
-        return self.execute_query(execute_sql, _exec_async=is_async)
+        return self.execute_query(execute_sql, _exec_async=False)
 
     def run_async(self, params: list[str], quiet: bool, resume: str = None):
         """
@@ -433,12 +428,9 @@ $$
         cursor = self._submit_nextflow_job(config, tarball_path, False, params, quiet, resume)
         cc.step(f"Nextflow job submitted successfully as service: {self.service_name}, query_id: {cursor.sfqid}")
 
-        try:
-            self.execute_query(f"call system$wait_for_services(60, '{self.service_name}')")
-            self.execute_query("alter session unset query_tag")
+        self.execute_query(f"call system$wait_for_services(60, '{self.service_name}')")
+        self.execute_query("alter session unset query_tag")
 
-            # Stream logs and get exit code
-            exit_code = self._stream_service_logs(self.service_name)
-            return exit_code
-        finally:
-            self.execute_query("drop service if exists " + self.service_name)
+        # Stream logs and get exit code
+        exit_code = self._stream_service_logs(self.service_name)
+        return exit_code
