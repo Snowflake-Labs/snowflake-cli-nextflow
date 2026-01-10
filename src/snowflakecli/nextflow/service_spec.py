@@ -36,6 +36,7 @@ class Volume:
     name: str
     source: str
     stageConfig: StageConfig = None
+    size: str = None  # For memory volumes, e.g., "1G", "512M"
 
 
 @dataclass

@@ -310,33 +310,53 @@ class NextflowManager(SqlExecutionMixin):
             nf_run_cmds.append(f"--{param_key}")
             nf_run_cmds.append(param_value)
 
-        # if not async, we need to run the pty server to get the logs
-        python_pty_server_cmd = "python3 /app/pty_server.py -- " if not is_async else ""
-        run_script = f"""
+        # Build the run script based on mode
+        if is_async:
+            # Async mode: single container, no log redirection to shared volume
+            run_script = f"""
 mkdir -p /mnt/project && cd /mnt/project
 tar -zxf {workDir}/{tarball_filename} 2>/dev/null
 cp -r /mnt/project/ {workDir}/
 
-{python_pty_server_cmd}{" ".join(nf_run_cmds)}
+{" ".join(nf_run_cmds)}
 cp /tmp/report.html {workDir}/report.html
 cp /tmp/trace.txt {workDir}/trace.txt
 cp /tmp/timeline.html {workDir}/timeline.html
+echo 'nextflow command finished successfully'
 """
-        if is_async:
-            run_script += "echo 'nextflow command finished successfully'"
+        else:
+            # Sync mode: redirect stdout/stderr to shared volume for websocket server
+            # Use Python PTY runner to capture output with proper terminal behavior
+            # Note: Memory volume is automatically clean, no need to remove files
+            run_script = f"""
+mkdir -p /mnt/project && cd /mnt/project
+tar -zxf {workDir}/{tarball_filename} 2>/dev/null
+cp -r /mnt/project/ {workDir}/
+cd {workDir}/project/
 
+# Use Python PTY runner to capture output with terminal behavior
+python3 /app/nextflow_runner.py {" ".join(nf_run_cmds)}
+EXIT_CODE=$?
+
+cp /tmp/report.html {workDir}/report.html
+cp /tmp/trace.txt {workDir}/trace.txt
+cp /tmp/timeline.html {workDir}/timeline.html
+
+exit $EXIT_CODE
+"""
+
+        # Configure volumes
         config.volumeConfig.volumeMounts.append(VolumeMount(name="workdir", mountPath="/mnt/workdir"))
 
-        volume = Volume(
+        stage_volume = Volume(
             name="workdir",
             source="stage",
             stageConfig=StageConfig(name="@" + config.workDirStage + "/", enableSymlink=True),
         )
 
-        config.volumeConfig.volumes.append(volume)
+        config.volumeConfig.volumes.append(stage_volume)
 
-        endpoints = None if is_async else [Endpoint(name="wss", port=8765, public=True)]
-
+        # Environment variables for nextflow container
         env = {
             "CURRENT_USER": user if user else "UNKNOWN",
             # to support resume, we need to use the same cache path across runs
@@ -346,19 +366,55 @@ cp /tmp/timeline.html {workDir}/timeline.html
         if warehouse:
             env["SNOWFLAKE_WAREHOUSE"] = warehouse
 
+        # Build containers and volumes based on mode
+        if is_async:
+            # Async mode: single container
+            containers = [
+                Container(
+                    name="nf-main",
+                    image=config.driverImage,
+                    command=["/bin/bash", "-e", "-c", run_script],
+                    volumeMounts=config.volumeConfig.volumeMounts,
+                    env=env,
+                )
+            ]
+            endpoints = None
+            volumes = config.volumeConfig.volumes
+        else:
+            # Sync mode: two containers with memory volume for log sharing
+            # Add memory volume for log sharing (100MB should be plenty for logs)
+            memory_volume = Volume(name="shared-logs", source="memory", size="50Mi")
+            config.volumeConfig.volumes.append(memory_volume)
+
+            # Container 1: Nextflow executor
+            containers = [
+                Container(
+                    name="nf-main",
+                    image=config.driverImage,
+                    command=["/bin/bash", "-e", "-c", run_script],
+                    volumeMounts=[
+                        VolumeMount(name="shared-logs", mountPath="/shared"),
+                        *config.volumeConfig.volumeMounts,
+                    ],
+                    env=env,
+                ),
+                # Container 2: WebSocket server
+                Container(
+                    name="websocket-server",
+                    image=config.driverImage,
+                    command=["python3", "/app/websocket_log_server.py", "--host", "0.0.0.0", "--port", "8765"],
+                    volumeMounts=[VolumeMount(name="shared-logs", mountPath="/shared")],
+                    readinessProbe=ReadinessProbe(port=8765, path="/healthz"),
+                    env=None,
+                ),
+            ]
+            endpoints = [Endpoint(name="wss", port=8765, public=True)]
+            volumes = config.volumeConfig.volumes
+
         spec = Specification(
             spec=Spec(
-                containers=[
-                    Container(
-                        name="nf-main",
-                        image=config.driverImage,
-                        command=["/bin/bash", "-e", "-c", run_script],
-                        volumeMounts=config.volumeConfig.volumeMounts,
-                        readinessProbe=ReadinessProbe(port=8765, path="/healthz") if not is_async else None,
-                        env=env,
-                    )
-                ],
-                volumes=config.volumeConfig.volumes,
+                containers=containers,
+                volumes=volumes,
                 endpoints=endpoints,
                 logExporters=LogExporters(eventTableConfig={"logLevel": "INFO"}),
             )
