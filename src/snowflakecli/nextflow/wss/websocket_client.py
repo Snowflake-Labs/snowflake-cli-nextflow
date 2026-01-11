@@ -98,18 +98,18 @@ class WebSocketClient:
             # Connect to the WebSocket server
             try:
                 async with websockets.connect(server_url, additional_headers=headers, ssl=ssl_context) as websocket:
-                    self.status_callback("connected", {"url": server_url})
-
+                    # Note: Server will send "connected" status message, so we don't need to call status_callback here
                     try:
                         # Continuously read messages from the server
                         async for message in websocket:
                             await self._handle_message(message)
-                            # If we received a completion status, we can break
-                            if self.exit_code is not None:
-                                break
+                            # After receiving completion status, continue reading until server closes
+                            # This allows the server to close the connection gracefully
 
                     except ConnectionClosed:
-                        self.status_callback("disconnected", {"reason": "Connection closed by server"})
+                        # Normal disconnection after completion
+                        if self.exit_code is None:
+                            self.status_callback("disconnected", {"reason": "Connection closed by server"})
                     except KeyboardInterrupt:
                         self.status_callback("disconnected", {"reason": "Disconnected by user"})
                         raise

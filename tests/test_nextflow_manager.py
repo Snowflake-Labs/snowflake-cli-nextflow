@@ -82,7 +82,9 @@ spec:
 
       cp /tmp/timeline.html /mnt/workdir/abc1234//timeline.html
 
-      echo ''nextflow command finished successfully'''
+      echo ''nextflow command finished successfully''
+
+      '
     env:
       CURRENT_USER: test_user
       NXF_IGNORE_RESUME_HISTORY: 'true'

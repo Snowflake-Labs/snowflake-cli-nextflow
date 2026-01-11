@@ -2,7 +2,7 @@
 WebSocket client package for Snowflake Nextflow integration.
 
 This package provides WebSocket client functionality for connecting to
-Nextflow PTY servers in Snowpark Container Services.
+Nextflow log servers in Snowpark Container Services.
 """
 
 from .websocket_client import WebSocketClient
