@@ -10,7 +10,6 @@ from websockets.exceptions import ConnectionClosed, InvalidURI, InvalidHandshake
 import json
 import ssl
 import sys
-import os
 from typing import Callable, Optional, Dict, Any
 from .websocket_exceptions import (
     WebSocketConnectionError,
