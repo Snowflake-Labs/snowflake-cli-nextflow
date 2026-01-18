@@ -9,6 +9,8 @@ import websockets
 from websockets.exceptions import ConnectionClosed, InvalidURI, InvalidHandshake
 import json
 import ssl
+import sys
+import os
 from typing import Callable, Optional, Dict, Any
 from .websocket_exceptions import (
     WebSocketConnectionError,
@@ -49,8 +51,9 @@ class WebSocketClient:
         self.exit_code = None  # Track the exit code
 
     def _default_message_callback(self, message: str) -> None:
-        """Default message callback - just print"""
-        print(message, end="")
+        """Default message callback - write directly to stdout to preserve ANSI codes"""
+        sys.stdout.write(message)
+        sys.stdout.flush()
 
     def _default_status_callback(self, status: str, data: Dict[str, Any]) -> None:
         """Default status callback - just print"""
@@ -98,18 +101,18 @@ class WebSocketClient:
             # Connect to the WebSocket server
             try:
                 async with websockets.connect(server_url, additional_headers=headers, ssl=ssl_context) as websocket:
-                    # Note: Server will send "connected" status message, so we don't need to call status_callback here
+                    self.status_callback("connected", {"url": server_url})
+
                     try:
                         # Continuously read messages from the server
                         async for message in websocket:
                             await self._handle_message(message)
-                            # After receiving completion status, continue reading until server closes
-                            # This allows the server to close the connection gracefully
+                            # If we received a completion status, we can break
+                            if self.exit_code is not None:
+                                break
 
                     except ConnectionClosed:
-                        # Normal disconnection after completion
-                        if self.exit_code is None:
-                            self.status_callback("disconnected", {"reason": "Connection closed by server"})
+                        self.status_callback("disconnected", {"reason": "Connection closed by server"})
                     except KeyboardInterrupt:
                         self.status_callback("disconnected", {"reason": "Disconnected by user"})
                         raise

@@ -15,6 +15,7 @@ from snowflakecli.nextflow.service_spec import (
 from snowflake.cli.api.exceptions import CliError
 from snowflake.cli.api.console import cli_console as cc
 import os
+import sys
 import tempfile
 import random
 import string
@@ -203,7 +204,8 @@ class NextflowManager(SqlExecutionMixin):
 
         # Callback functions for WebSocket events
         def on_message(message: str) -> None:
-            print(message, end="")
+            sys.stdout.write(message)
+            sys.stdout.flush()
 
         def on_status(status: str, data: dict) -> None:
             if status == "starting":
@@ -283,7 +285,7 @@ class NextflowManager(SqlExecutionMixin):
         nf_run_cmds.extend(
             [
                 "run",
-                f"{workDir}/project/",
+                "/mnt/project/",
                 "-name",
                 self._run_id,
                 "-ansi-log",
@@ -312,11 +314,10 @@ class NextflowManager(SqlExecutionMixin):
 
         # Build the run script based on mode
         if is_async:
-            # Async mode: single container, no log redirection to shared volume
+            # Async mode: single container, no websocket server
             run_script = f"""
 mkdir -p /mnt/project && cd /mnt/project
 tar -zxf {workDir}/{tarball_filename} 2>/dev/null
-cp -r /mnt/project/ {workDir}/
 
 {" ".join(nf_run_cmds)}
 cp /tmp/report.html {workDir}/report.html
@@ -325,17 +326,13 @@ cp /tmp/timeline.html {workDir}/timeline.html
 echo 'nextflow command finished successfully'
 """
         else:
-            # Sync mode: redirect stdout/stderr to shared volume for websocket server
-            # Use Python PTY runner to capture output with proper terminal behavior
-            # Note: Memory volume is automatically clean, no need to remove files
+            # Sync mode: single container with pty_server.py
             run_script = f"""
 mkdir -p /mnt/project && cd /mnt/project
 tar -zxf {workDir}/{tarball_filename} 2>/dev/null
-cp -r /mnt/project/ {workDir}/
-cd {workDir}/project/
 
-# Use Python PTY runner to capture output with terminal behavior
-python3 /app/nextflow_runner.py {" ".join(nf_run_cmds)}
+# Use pty_server.py to run nextflow with websocket streaming
+python3 /app/pty_server.py --host 0.0.0.0 --port 8765 -- {" ".join(nf_run_cmds)}
 EXIT_CODE=$?
 
 cp /tmp/report.html {workDir}/report.html
@@ -368,7 +365,7 @@ exit $EXIT_CODE
 
         # Build containers and volumes based on mode
         if is_async:
-            # Async mode: single container
+            # Async mode: single container, no websocket endpoint
             containers = [
                 Container(
                     name="nf-main",
@@ -381,32 +378,16 @@ exit $EXIT_CODE
             endpoints = None
             volumes = config.volumeConfig.volumes
         else:
-            # Sync mode: two containers with memory volume for log sharing
-            # Add memory volume for log sharing (100MB should be plenty for logs)
-            memory_volume = Volume(name="shared-logs", source="memory", size="50Mi")
-            config.volumeConfig.volumes.append(memory_volume)
-
-            # Container 1: Nextflow executor
+            # Sync mode: single container with pty_server.py and websocket endpoint
             containers = [
                 Container(
                     name="nf-main",
                     image=config.driverImage,
                     command=["/bin/bash", "-e", "-c", run_script],
-                    volumeMounts=[
-                        VolumeMount(name="shared-logs", mountPath="/shared"),
-                        *config.volumeConfig.volumeMounts,
-                    ],
-                    env=env,
-                ),
-                # Container 2: WebSocket server
-                Container(
-                    name="websocket-server",
-                    image=config.driverImage,
-                    command=["python3", "/app/websocket_log_server.py", "--host", "0.0.0.0", "--port", "8765"],
-                    volumeMounts=[VolumeMount(name="shared-logs", mountPath="/shared")],
+                    volumeMounts=config.volumeConfig.volumeMounts,
                     readinessProbe=ReadinessProbe(port=8765, path="/healthz"),
-                    env=None,
-                ),
+                    env=env,
+                )
             ]
             endpoints = [Endpoint(name="wss", port=8765, public=True)]
             volumes = config.volumeConfig.volumes

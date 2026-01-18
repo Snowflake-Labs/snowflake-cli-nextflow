@@ -110,6 +110,9 @@ tar -zxf {workDir}/{tarball_filename} 2>/dev/null
                         image=config.driverImage,
                         command=["/bin/bash", "-c", run_script],
                         volumeMounts=[volumeMount],
+                        env= {
+                            "SNOWFLAKE_CACHE_PATH": "/mnt/workdir/cache",
+                        },
                     )
                 ],
                 volumes=[volume],
