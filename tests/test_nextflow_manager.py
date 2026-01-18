@@ -68,13 +68,10 @@ spec:
 
       tar -zxf /mnt/workdir/abc1234//tmp1234.tar.gz 2>/dev/null
 
-      cp -r /mnt/project/ /mnt/workdir/abc1234//
 
-
-      nextflow -log /dev/stderr run /mnt/workdir/abc1234//project/ -name abc1234 -ansi-log
-      False -profile test -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace
-      /tmp/trace.txt -with-timeline /tmp/timeline.html --param1 ''value1'' --param2
-      ''value2''
+      nextflow -log /dev/stderr run /mnt/project/ -name abc1234 -ansi-log False -profile
+      test -work-dir /mnt/workdir -with-report /tmp/report.html -with-trace /tmp/trace.txt
+      -with-timeline /tmp/timeline.html --param1 ''value1'' --param2 ''value2''
 
       cp /tmp/report.html /mnt/workdir/abc1234//report.html
 
